@@ -1,0 +1,26 @@
+# Root / IDEs
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env*.local
+
+# Backend (Go)
+backend/bin/
+backend/tmp/
+backend/*.exe
+backend/*.out
+
+# Blockchain (Hyperledger Fabric)
+blockchain/network/organizations/peerOrganizations/
+blockchain/network/organizations/ordererOrganizations/
+blockchain/network/channel-artifacts/
+blockchain/**/*.tar.gz
+
+# Infrastructure / Secrets
+.env
