@@ -30,7 +30,7 @@ export default function LandingPage() {
           </div>
           {/* Right: Launch Portal Button */}
           <a
-            href="#"
+            href="/role-selection"
             className="bg-[#F37021] text-white font-semibold px-5 py-2 rounded-full shadow-lg hover:bg-[#D9621C] transition-all duration-150"
           >
             Launch Portal
@@ -57,7 +57,7 @@ export default function LandingPage() {
             </p>
             <div className="flex gap-6 mt-8">
               <a
-                href="#"
+                href="/role-selection"
                 className="bg-[#F37021] text-white font-bold px-6 py-3 rounded-[8px] shadow-[0_4px_24px_0_rgba(243,112,33,0.25)] hover:bg-[#D9621C] transition-all duration-150"
               >
                 Launch Portal
