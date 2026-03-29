@@ -1,7 +1,9 @@
 COMPOSE = docker compose
 ENV_FILE = .env
+BACKEND_DIR = backend
 
-.PHONY: up down restart logs ps db-shell db-reset clean
+.PHONY: up down restart logs ps db-shell db-reset clean \
+	backend-tidy backend-run backend-test backend-build backend-migrate-up
 
 up:
 	$(COMPOSE) --env-file $(ENV_FILE) up -d
@@ -28,3 +30,21 @@ db-reset:
 
 clean:
 	$(COMPOSE) --env-file $(ENV_FILE) down -v --remove-orphans
+
+# Backend (Go)
+backend-tidy:
+	cd $(BACKEND_DIR) && go mod tidy
+
+backend-run:
+	@set -a; test -f $(ENV_FILE) && . ./$(ENV_FILE); set +a; cd $(BACKEND_DIR) && go run ./cmd/api
+
+backend-test:
+	cd $(BACKEND_DIR) && go test ./...
+
+backend-build:
+	cd $(BACKEND_DIR) && go build -o bin/api ./cmd/api
+
+GOOSE = go run github.com/pressly/goose/v3/cmd/goose@v3.24.1
+
+backend-migrate-up:
+	@set -a; test -f $(ENV_FILE) && . ./$(ENV_FILE); set +a; cd $(BACKEND_DIR) && $(GOOSE) -dir migrations postgres "$$DATABASE_URL" up
