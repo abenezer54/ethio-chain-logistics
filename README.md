@@ -6,7 +6,7 @@ This README is the main entry point for setting up and running the project local
 
 ## Repository structure
 
-- `backend/`: backend services (planned)
+- `backend/`: Go API (Gin, Clean Architecture) — see [backend/README.md](backend/README.md)
 - `frontend/`: web/mobile frontend code (planned)
 - `blockchain/`: blockchain network and smart contract resources (planned)
 - `infrastructure/`: local/devops infrastructure assets
@@ -19,6 +19,7 @@ This README is the main entry point for setting up and running the project local
 - Docker Engine or Docker Desktop
 - Docker Compose plugin (`docker compose`)
 - `make`
+- [Go 1.23+](https://go.dev/dl/) (for the API on your host)
 
 ## Quick start
 
@@ -55,6 +56,20 @@ make logs
 
 Stop log streaming with `Ctrl + C`.
 
+## Backend API (Go)
+
+With Postgres running (`make up`) and `.env` created from `.env.example` (includes `DATABASE_URL`):
+
+```bash
+make backend-run
+```
+
+- Health: `GET http://localhost:8080/health`
+- Readiness (DB ping): `GET http://localhost:8080/ready`
+- API root: `GET http://localhost:8080/api/v1`
+
+Other targets: `make backend-test`, `make backend-build`, `make backend-migrate-up`. Details: [backend/README.md](backend/README.md).
+
 ## Current local services
 
 ### PostgreSQL
@@ -89,6 +104,7 @@ Use `postgres` as host for tools running inside Docker. Use `localhost` for tool
 - `make db-shell`: open `psql` in the PostgreSQL container
 - `make db-reset`: recreate DB from scratch (removes local DB volume)
 - `make clean`: remove services, volumes, and orphans
+- `make backend-run` / `backend-test` / `backend-build` / `backend-migrate-up`: Go API (see [backend/README.md](backend/README.md))
 
 ## Notes
 
