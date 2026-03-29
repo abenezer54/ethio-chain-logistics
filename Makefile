@@ -30,6 +30,7 @@ db-reset:
 
 clean:
 	$(COMPOSE) --env-file $(ENV_FILE) down -v --remove-orphans
+<<<<<<< HEAD
 
 # Backend (Go)
 backend-tidy:
@@ -48,3 +49,5 @@ GOOSE = go run github.com/pressly/goose/v3/cmd/goose@v3.24.1
 
 backend-migrate-up:
 	@set -a; test -f $(ENV_FILE) && . ./$(ENV_FILE); set +a; cd $(BACKEND_DIR) && $(GOOSE) -dir migrations postgres "$$DATABASE_URL" up
+=======
+>>>>>>> origin/main
