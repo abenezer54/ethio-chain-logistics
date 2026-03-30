@@ -35,5 +35,36 @@ services:
       postgres:
         condition: service_healthy
 
+  backend:
+    image: golang:1.22-alpine
+    container_name: ethio_chain_backend
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+      - go_mod_cache:/go/pkg/mod
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-ethio_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ethio_pass}
+      - POSTGRES_DB=${POSTGRES_DB:-ethio_chain}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - API_PORT=8080
+      - JWT_SECRET=${JWT_SECRET:-dev-secret}
+      - UPLOAD_DIR=/app/uploads
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@local.dev}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - GIN_MODE=debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "
+        go run github.com/pressly/goose/v3/cmd/goose@v3.24.1 -dir migrations postgres \"postgres://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@postgres:5432/$${POSTGRES_DB}?sslmode=disable\" up &&
+        go run ./cmd/api
+      "
+
 volumes:
   postgres_data:
+  go_mod_cache:

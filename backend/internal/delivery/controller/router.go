@@ -8,10 +8,11 @@ import (
 )
 
 // Router builds the Gin engine with API routes.
-func Router(health *usecase.HealthUsecase) *gin.Engine {
+func Router(health *usecase.HealthUsecase, authHandlers *AuthHandlers, adminHandlers *AdminHandlers, jwtSecret string) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(RequestID())
+	r.Use(CORS())
 
 	r.GET("/health", func(c *gin.Context) {
 		if !health.Live() {
@@ -37,6 +38,13 @@ func Router(health *usecase.HealthUsecase) *gin.Engine {
 				"version": "0.1.0",
 			})
 		})
+
+		if authHandlers != nil {
+			authHandlers.RegisterRoutes(v1)
+		}
+		if adminHandlers != nil {
+			adminHandlers.RegisterRoutes(v1, jwtSecret)
+		}
 	}
 
 	return r

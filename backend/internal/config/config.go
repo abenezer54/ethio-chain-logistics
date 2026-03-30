@@ -11,6 +11,9 @@ type Config struct {
 	Addr         string
 	DatabaseURL  string
 	GinMode      string
+	JWTSecret    string
+	UploadDir    string
+	FromEmail    string
 }
 
 // Load reads configuration from environment variables.
@@ -23,12 +26,24 @@ func Load() (Config, error) {
 		Addr:         ":" + port,
 		DatabaseURL:  os.Getenv("DATABASE_URL"),
 		GinMode:      os.Getenv("GIN_MODE"),
+		JWTSecret:    os.Getenv("JWT_SECRET"),
+		UploadDir:    os.Getenv("UPLOAD_DIR"),
+		FromEmail:    os.Getenv("FROM_EMAIL"),
 	}
 	if cfg.DatabaseURL == "" {
 		cfg.DatabaseURL = databaseURLFromParts()
 	}
 	if cfg.GinMode == "" {
 		cfg.GinMode = "debug"
+	}
+	if cfg.JWTSecret == "" {
+		cfg.JWTSecret = "dev-insecure-secret"
+	}
+	if cfg.UploadDir == "" {
+		cfg.UploadDir = "uploads"
+	}
+	if cfg.FromEmail == "" {
+		cfg.FromEmail = "no-reply@local.dev"
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL or POSTGRES_* variables must be set")

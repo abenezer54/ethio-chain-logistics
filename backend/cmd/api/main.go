@@ -11,9 +11,11 @@ import (
 
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/config"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/delivery/controller"
+	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/repository"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/usecase"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
@@ -32,7 +34,16 @@ func main() {
 
 	healthUC := usecase.NewHealthUsecase(pool)
 
-	engine := controller.Router(healthUC)
+	userRepo := repository.NewUserRepo(pool)
+	docRepo := repository.NewKYCDocRepo(pool)
+	emailSender := usecase.NoopEmailSender{}
+	authUC := usecase.NewAuthUsecase(userRepo, docRepo, emailSender, cfg.JWTSecret)
+	authHandlers := controller.NewAuthHandlers(authUC, cfg.UploadDir)
+	adminHandlers := controller.NewAdminHandlers(authUC, cfg.UploadDir)
+
+	bootstrapAdmin(ctx, userRepo)
+
+	engine := controller.Router(healthUC, authHandlers, adminHandlers, cfg.JWTSecret)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
@@ -59,4 +70,38 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown: %v", err)
 	}
+}
+
+func bootstrapAdmin(ctx context.Context, users *repository.UserRepo) {
+	email := os.Getenv("ADMIN_EMAIL")
+	pass := os.Getenv("ADMIN_PASSWORD")
+	if email == "" || pass == "" {
+		return
+	}
+	_, err := users.GetUserByEmail(ctx, email)
+	if err == nil {
+		return
+	}
+	if err != domain.ErrNotFound {
+		log.Printf("bootstrap admin: lookup failed: %v", err)
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("bootstrap admin: hash failed: %v", err)
+		return
+	}
+	_, err = users.CreateUser(ctx, domain.User{
+		Email:        email,
+		PasswordHash: string(hash),
+		Role:         domain.RoleAdmin,
+		Status:       domain.StatusActive,
+		FullName:     "Admin",
+	})
+	if err != nil {
+		log.Printf("bootstrap admin: create failed: %v", err)
+		return
+	}
+	log.Printf("bootstrap admin: created admin user %s", email)
 }
