@@ -12,6 +12,7 @@ frontend/.env*.local
 
 # Backend (Go)
 backend/bin/
+backend/uploads/
 backend/tmp/
 backend/*.exe
 backend/*.out
