@@ -3,7 +3,7 @@ ENV_FILE = .env
 BACKEND_DIR = backend
 
 .PHONY: up down restart logs ps db-shell db-reset clean \
-	backend-tidy backend-run backend-test backend-build backend-migrate-up
+	backend-tidy backend-run backend-test backend-build backend-migrate-up frontend
 
 up:
 	$(COMPOSE) --env-file $(ENV_FILE) up -d
@@ -30,7 +30,6 @@ db-reset:
 
 clean:
 	$(COMPOSE) --env-file $(ENV_FILE) down -v --remove-orphans
-<<<<<<< HEAD
 
 # Backend (Go)
 backend-tidy:
@@ -48,6 +47,13 @@ backend-build:
 GOOSE = go run github.com/pressly/goose/v3/cmd/goose@v3.24.1
 
 backend-migrate-up:
-	@set -a; test -f $(ENV_FILE) && . ./$(ENV_FILE); set +a; cd $(BACKEND_DIR) && $(GOOSE) -dir migrations postgres "$$DATABASE_URL" up
-=======
->>>>>>> origin/main
+	@set -a; test -f $(ENV_FILE) && . ./$(ENV_FILE); set +a; \
+	if [ -z "$$DATABASE_URL" ]; then \
+		export DATABASE_URL="postgres://$${POSTGRES_USER:-ethio_user}:$${POSTGRES_PASSWORD:-ethio_pass}@$${POSTGRES_HOST:-localhost}:$${POSTGRES_PORT:-5432}/$${POSTGRES_DB:-ethio_chain}?sslmode=disable"; \
+	fi; \
+	cd $(BACKEND_DIR) && $(GOOSE) -dir migrations postgres "$$DATABASE_URL" up
+
+# Frontend
+frontend:
+	@echo "Starting frontend on http://localhost:3000 ..."
+	cd frontend && NEXT_PUBLIC_API_BASE=http://localhost:8080 npm run dev
