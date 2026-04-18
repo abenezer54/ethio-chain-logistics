@@ -458,7 +458,7 @@ function DocumentsList({
   documents: ShipmentDocument[];
   token: string;
 }) {
-  if (documents.length === 0) {
+  if (!documents || documents.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-ec-border bg-ec-surface-raised p-4 text-sm text-ec-text-muted">
         No documents uploaded yet.
@@ -514,7 +514,7 @@ function DocumentsList({
 }
 
 function Timeline({ events }: { events: ShipmentEvent[] }) {
-  if (events.length === 0) {
+  if (!events || events.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-ec-border bg-ec-surface-raised p-4 text-sm text-ec-text-muted">
         No audit events yet.
@@ -809,7 +809,7 @@ export function ImporterWorkspace() {
           <div className="mt-5">
             {loading ? (
               <ShipmentSkeleton />
-            ) : shipments.length === 0 ? (
+            ) : !shipments || shipments.length === 0 ? (
               <div className="rounded-lg border border-dashed border-ec-border bg-ec-surface-raised p-6 text-center">
                 <MapPin
                   size={32}
