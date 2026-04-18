@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
+	"github.com/google/uuid"
 )
 
 type ShipmentRepository interface {
@@ -69,6 +70,11 @@ func (r CreateShipmentRequest) Validate() error {
 	}
 	if strings.TrimSpace(r.CargoType) == "" {
 		return fmt.Errorf("cargo type is required")
+	}
+	if strings.TrimSpace(r.SellerID) != "" {
+		if _, err := uuid.Parse(strings.TrimSpace(r.SellerID)); err != nil {
+			return fmt.Errorf("seller_id must be a valid UUID")
+		}
 	}
 	if err := validatePositiveDecimal(r.WeightKG, "weight_kg"); err != nil {
 		return err

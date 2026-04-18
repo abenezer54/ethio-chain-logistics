@@ -326,7 +326,7 @@ ORDER BY uploaded_at ASC
 	}
 	defer rows.Close()
 
-	var out []domain.ShipmentDocument
+	out := make([]domain.ShipmentDocument, 0)
 	for rows.Next() {
 		d, err := scanDocument(rows)
 		if err != nil {
@@ -359,7 +359,7 @@ ORDER BY created_at ASC
 	}
 	defer rows.Close()
 
-	var out []domain.ShipmentEvent
+	out := make([]domain.ShipmentEvent, 0)
 	for rows.Next() {
 		e, err := scanEvent(rows)
 		if err != nil {
