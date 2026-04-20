@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
-	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -82,8 +82,3 @@ func currentUserID(c *gin.Context) string {
 	return s
 }
 
-func currentUserRole(c *gin.Context) domain.UserRole {
-	v, _ := c.Get(ctxRoleKey)
-	s, _ := v.(string)
-	return domain.UserRole(s)
-}
