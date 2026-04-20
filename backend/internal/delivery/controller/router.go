@@ -8,7 +8,7 @@ import (
 )
 
 // Router builds the Gin engine with API routes.
-func Router(health *usecase.HealthUsecase, authHandlers *AuthHandlers, adminHandlers *AdminHandlers, importerHandlers *ImporterHandlers, jwtSecret string) *gin.Engine {
+func Router(health *usecase.HealthUsecase, authHandlers *AuthHandlers, adminHandlers *AdminHandlers, jwtSecret string) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(RequestID())
@@ -44,9 +44,6 @@ func Router(health *usecase.HealthUsecase, authHandlers *AuthHandlers, adminHand
 		}
 		if adminHandlers != nil {
 			adminHandlers.RegisterRoutes(v1, jwtSecret)
-		}
-		if importerHandlers != nil {
-			importerHandlers.RegisterRoutes(v1, jwtSecret)
 		}
 	}
 

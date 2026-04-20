@@ -36,17 +36,14 @@ func main() {
 
 	userRepo := repository.NewUserRepo(pool)
 	docRepo := repository.NewKYCDocRepo(pool)
-	shipmentRepo := repository.NewShipmentRepo(pool)
 	emailSender := usecase.NoopEmailSender{}
 	authUC := usecase.NewAuthUsecase(userRepo, docRepo, emailSender, cfg.JWTSecret)
-	shipmentUC := usecase.NewShipmentUsecase(shipmentRepo)
 	authHandlers := controller.NewAuthHandlers(authUC, cfg.UploadDir)
 	adminHandlers := controller.NewAdminHandlers(authUC, cfg.UploadDir)
-	importerHandlers := controller.NewImporterHandlers(shipmentUC, cfg.UploadDir)
 
 	bootstrapAdmin(ctx, userRepo)
 
-	engine := controller.Router(healthUC, authHandlers, adminHandlers, importerHandlers, cfg.JWTSecret)
+	engine := controller.Router(healthUC, authHandlers, adminHandlers, cfg.JWTSecret)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
