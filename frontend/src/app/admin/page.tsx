@@ -255,7 +255,7 @@ function ReviewDrawer({
   }, [open, reviewUserId]);
 
   useEffect(() => {
-    if (docsLoading || docs.length === 0) return;
+    if (docsLoading || !docs || docs.length === 0) return;
     setSelectedDoc((prev) => {
       if (prev && docs.some((d) => d.id === prev.id)) return prev;
       return docs[0];
@@ -386,7 +386,7 @@ function ReviewDrawer({
                     Download file
                   </button>
                 </div>
-              ) : !docs.length ? (
+              ) : !docs || docs.length === 0 ? (
                 <div className="text-center text-slate-400">
                   <p className="text-sm">No documents to preview</p>
                 </div>
@@ -398,7 +398,7 @@ function ReviewDrawer({
             </div>
 
             {/* Filmstrip */}
-            {!docsLoading && docs.length > 0 ? (
+            {!docsLoading && docs && docs.length > 0 ? (
               <div className="border-t border-white/10 bg-black/20 px-3 py-3 sm:px-4">
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                   Select a file
@@ -1001,10 +1001,10 @@ export default function AdminPage() {
                 </h2>
                 <p className="mt-0.5 text-sm text-ec-text-secondary">
                   <span className="font-semibold tabular-nums text-ec-text">
-                    {pending.length}
+                    {pending?.length ?? 0}
                   </span>{" "}
                   registration
-                  {pending.length === 1 ? "" : "s"} waiting for review
+                  {pending?.length === 1 ? "" : "s"} waiting for review
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -1064,7 +1064,7 @@ export default function AdminPage() {
                   </button>
                 </div>
               ))}
-              {pending.length === 0 ? (
+              {!pending || pending.length === 0 ? (
                 <div className="flex flex-col items-center rounded-2xl border border-dashed border-ec-border bg-ec-surface/50 py-16 text-center">
                   <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-ec-navy/5 text-ec-navy">
                     <Inbox size={32} strokeWidth={1.25} aria-hidden />
