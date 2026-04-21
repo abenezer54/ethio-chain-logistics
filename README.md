@@ -10,8 +10,7 @@ This README is the main entry point for setting up and running the project local
 - `frontend/`: Next.js web app — see [frontend/README.md](frontend/README.md)
 - `blockchain/`: blockchain network and smart contract resources (planned)
 - `infrastructure/`: local/devops infrastructure assets
-- `docker-compose.yml`: local shared services for development
-- `docker-compose.app.yml`: full app stack for Postgres, migrations, backend, and frontend
+- `docker-compose.yml`: local Docker development stack for Postgres, migrations, and the Go API
 - `Makefile`: common local development commands
 
 ## Prerequisites
@@ -57,40 +56,19 @@ make logs
 
 Stop log streaming with `Ctrl + C`.
 
-## Full app with Docker
+## Dev Stack With Docker
 
-The project also includes a complementary app stack that builds and runs the database, migrations,
-Go API, and Next.js frontend together:
+The single Compose file runs PostgreSQL, a one-shot migrations container, and the Go API:
 
 ```bash
-docker compose -f docker-compose.app.yml up --build -d
+docker compose up --build -d
 ```
 
-- Frontend: `http://localhost:3000`
 - Backend: `http://localhost:8080`
 - Health: `GET http://localhost:8080/health`
 
-The app stack keeps PostgreSQL internal by default so it can run alongside another local Postgres on
-port `5432`. To expose the app database to tools such as Beekeeper Studio, add the DB-port override:
-
-```bash
-docker compose -f docker-compose.app.yml -f docker-compose.app.db-port.yml up -d
-```
-
-Then connect with:
-
-- Host: `127.0.0.1`
-- Port: `5433`
-- Database: `ethio_chain`
-- User: `ethio_user`
-- Password: `ethio_pass`
-- SSL: disabled
-
-Stop the app stack with:
-
-```bash
-docker compose -f docker-compose.app.yml down
-```
+The database is published on `localhost:${POSTGRES_PORT}` and defaults to `5432`. If that port is
+already in use on your machine, change `POSTGRES_PORT` in `.env`.
 
 ## Backend API (Go)
 
@@ -120,19 +98,6 @@ Other targets: `make backend-test`, `make backend-build`, `make backend-migrate-
 - Port: `5432` (or `POSTGRES_PORT` from `.env`)
 - Database: `ethio_chain` (default)
 - User: `ethio_user` (default)
-
-### pgAdmin
-
-- URL: `http://localhost:5050` (or `PGADMIN_PORT` from `.env`)
-- Email: `admin@local.dev` (default)
-- Password: `admin123` (default)
-
-To connect pgAdmin to PostgreSQL, register a server with:
-
-- Host name/address: `postgres`
-- Port: `5432`
-- Username: value of `POSTGRES_USER`
-- Password: value of `POSTGRES_PASSWORD`
 
 Use `postgres` as host for tools running inside Docker. Use `localhost` for tools running directly on your machine.
 

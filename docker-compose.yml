@@ -1,3 +1,5 @@
+name: ethio-chain-logistics-dev
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -11,7 +13,6 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-
     healthcheck:
       test:
         [
@@ -22,21 +23,25 @@ services:
       timeout: 5s
       retries: 10
 
-  pgadmin:
-    image: dpage/pgadmin4:8
-    container_name: ethio_chain_pgadmin
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@local.dev}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
-    ports:
-      - "${PGADMIN_PORT:-5050}:80"
+  migrations:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: migrate
+    container_name: ethio_chain_migrations
     depends_on:
       postgres:
         condition: service_healthy
+    command:
+      [
+        "postgres",
+        "postgres://${POSTGRES_USER:-ethio_user}:${POSTGRES_PASSWORD:-ethio_pass}@postgres:5432/${POSTGRES_DB:-ethio_chain}?sslmode=disable",
+        "up",
+      ]
+    restart: "no"
 
   backend:
-    image: golang:1.22-alpine
+    image: golang:1.23-alpine
     container_name: ethio_chain_backend
     working_dir: /app
     volumes:
@@ -45,25 +50,24 @@ services:
     ports:
       - "${API_PORT:-8080}:8080"
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-ethio_user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ethio_pass}
-      - POSTGRES_DB=${POSTGRES_DB:-ethio_chain}
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - API_PORT=8080
-      - JWT_SECRET=${JWT_SECRET:-dev-secret}
-      - UPLOAD_DIR=/app/uploads
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@local.dev}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
-      - GIN_MODE=debug
+      POSTGRES_USER: ${POSTGRES_USER:-ethio_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ethio_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-ethio_chain}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      DATABASE_URL: postgres://${POSTGRES_USER:-ethio_user}:${POSTGRES_PASSWORD:-ethio_pass}@postgres:5432/${POSTGRES_DB:-ethio_chain}?sslmode=disable
+      API_PORT: 8080
+      JWT_SECRET: ${JWT_SECRET:-dev-secret}
+      UPLOAD_DIR: /app/uploads
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@local.dev}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      GIN_MODE: ${GIN_MODE:-debug}
     depends_on:
       postgres:
         condition: service_healthy
-    command: >
-      sh -c "
-        go run github.com/pressly/goose/v3/cmd/goose@v3.24.1 -dir migrations postgres \"postgres://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@postgres:5432/$${POSTGRES_DB}?sslmode=disable\" up &&
-        go run ./cmd/api
-      "
+      migrations:
+        condition: service_completed_successfully
+    command: ["go", "run", "./cmd/api"]
 
 volumes:
   postgres_data:

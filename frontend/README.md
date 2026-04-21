@@ -19,18 +19,13 @@ NEXT_PUBLIC_API_BASE=http://localhost:8080 npm run dev
 
 Open `http://localhost:3000`.
 
-## Run With Docker
+## Backend dependency
 
-From the repository root:
+The frontend expects the backend API at `http://localhost:8080` by default. Start the backend stack
+from the repository root with:
 
 ```bash
-docker compose -f docker-compose.app.yml up --build -d
-```
-
-The frontend is available at:
-
-```text
-http://localhost:3000
+make up
 ```
 
 ## Implemented Screens
@@ -84,9 +79,8 @@ npm run start
 npm run lint
 ```
 
-If dependencies are not installed locally, the Docker frontend build still validates the production
-Next.js build:
+Build the production bundle locally with:
 
 ```bash
-docker build -f frontend/Dockerfile frontend
+npm run build
 ```
