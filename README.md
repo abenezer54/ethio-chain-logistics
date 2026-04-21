@@ -7,10 +7,10 @@ This README is the main entry point for setting up and running the project local
 ## Repository structure
 
 - `backend/`: Go API (Gin, Clean Architecture) — see [backend/README.md](backend/README.md)
-- `frontend/`: web/mobile frontend code (planned)
+- `frontend/`: Next.js web app — see [frontend/README.md](frontend/README.md)
 - `blockchain/`: blockchain network and smart contract resources (planned)
 - `infrastructure/`: local/devops infrastructure assets
-- `docker-compose.yml`: local shared services
+- `docker-compose.yml`: local Docker development stack for Postgres, migrations, and the Go API
 - `Makefile`: common local development commands
 
 ## Prerequisites
@@ -56,6 +56,20 @@ make logs
 
 Stop log streaming with `Ctrl + C`.
 
+## Dev Stack With Docker
+
+The single Compose file runs PostgreSQL, a one-shot migrations container, and the Go API:
+
+```bash
+docker compose up --build -d
+```
+
+- Backend: `http://localhost:8080`
+- Health: `GET http://localhost:8080/health`
+
+The database is published on `localhost:${POSTGRES_PORT}` and defaults to `5432`. If that port is
+already in use on your machine, change `POSTGRES_PORT` in `.env`.
+
 ## Backend API (Go)
 
 With Postgres running (`make up`) and `.env` created from `.env.example` (includes `DATABASE_URL`):
@@ -67,6 +81,12 @@ make backend-run
 - Health: `GET http://localhost:8080/health`
 - Readiness (DB ping): `GET http://localhost:8080/ready`
 - API root: `GET http://localhost:8080/api/v1`
+- Importer shipments:
+  - `GET /api/v1/importer/shipments`
+  - `POST /api/v1/importer/shipments`
+  - `GET /api/v1/importer/shipments/:id`
+  - `POST /api/v1/importer/shipments/:id/documents`
+  - `GET /api/v1/importer/shipments/:id/documents/:docID/download`
 
 Other targets: `make backend-test`, `make backend-build`, `make backend-migrate-up`. Details: [backend/README.md](backend/README.md).
 
@@ -78,19 +98,6 @@ Other targets: `make backend-test`, `make backend-build`, `make backend-migrate-
 - Port: `5432` (or `POSTGRES_PORT` from `.env`)
 - Database: `ethio_chain` (default)
 - User: `ethio_user` (default)
-
-### pgAdmin
-
-- URL: `http://localhost:5050` (or `PGADMIN_PORT` from `.env`)
-- Email: `admin@local.dev` (default)
-- Password: `admin123` (default)
-
-To connect pgAdmin to PostgreSQL, register a server with:
-
-- Host name/address: `postgres`
-- Port: `5432`
-- Username: value of `POSTGRES_USER`
-- Password: value of `POSTGRES_PASSWORD`
 
 Use `postgres` as host for tools running inside Docker. Use `localhost` for tools running directly on your machine.
 

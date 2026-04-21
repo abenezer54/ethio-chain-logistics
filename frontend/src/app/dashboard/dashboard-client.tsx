@@ -8,6 +8,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { PortalHeader } from "@/components/layout/PortalHeader";
 import { clearStoredToken, getStoredToken } from "@/lib/auth-storage";
 import { decodeJwtPayload, isTokenExpired } from "@/lib/jwt";
+import { ImporterWorkspace } from "./importer-workspace";
 
 function roleTitle(role: string): string {
   switch (role) {
@@ -130,36 +131,40 @@ export default function DashboardClient() {
         }
       />
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 md:px-8">
-        <div className="ec-card border-ec-border shadow-md">
-          <div className="flex items-start gap-4">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-ec-navy/10 text-ec-navy">
-              <LayoutDashboard size={26} aria-hidden />
-            </span>
-            <div>
-              <h2 className="text-lg font-bold text-ec-text">
-                What this page is for
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-ec-text-secondary">
-                {panel?.body}
-              </p>
-              <p className="mt-4 text-sm text-ec-text-muted">{panel?.hint}</p>
+      {role === "IMPORTER" ? (
+        <ImporterWorkspace />
+      ) : (
+        <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 md:px-8">
+          <div className="ec-card border-ec-border shadow-md">
+            <div className="flex items-start gap-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-ec-navy/10 text-ec-navy">
+                <LayoutDashboard size={26} aria-hidden />
+              </span>
+              <div>
+                <h2 className="text-lg font-bold text-ec-text">
+                  What this page is for
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-ec-text-secondary">
+                  {panel?.body}
+                </p>
+                <p className="mt-4 text-sm text-ec-text-muted">{panel?.hint}</p>
+              </div>
+            </div>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <Link href="/" className="ec-btn-primary justify-center px-6">
+                Visit public site
+              </Link>
+              <Link
+                href="/role-selection"
+                className="ec-btn-ghost justify-center border border-ec-border bg-ec-card px-6"
+              >
+                See all roles
+              </Link>
             </div>
           </div>
-
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <Link href="/" className="ec-btn-primary justify-center px-6">
-              Visit public site
-            </Link>
-            <Link
-              href="/role-selection"
-              className="ec-btn-ghost justify-center border border-ec-border bg-ec-card px-6"
-            >
-              See all roles
-            </Link>
-          </div>
-        </div>
-      </main>
+        </main>
+      )}
     </div>
   );
 }

@@ -6,14 +6,14 @@ BACKEND_DIR = backend
 	backend-tidy backend-run backend-test backend-build backend-migrate-up frontend
 
 up:
-	$(COMPOSE) --env-file $(ENV_FILE) up -d
+	$(COMPOSE) --env-file $(ENV_FILE) up --build -d
 
 down:
 	$(COMPOSE) --env-file $(ENV_FILE) down
 
 restart:
 	$(COMPOSE) --env-file $(ENV_FILE) down
-	$(COMPOSE) --env-file $(ENV_FILE) up -d
+	$(COMPOSE) --env-file $(ENV_FILE) up --build -d
 
 logs:
 	$(COMPOSE) --env-file $(ENV_FILE) logs -f --tail=200
