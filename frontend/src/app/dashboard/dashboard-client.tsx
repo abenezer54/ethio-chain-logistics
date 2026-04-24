@@ -76,9 +76,14 @@ export default function DashboardClient() {
       router.replace("/admin");
       return;
     }
-    // schedule state updates to avoid synchronous setState inside effect
+    if (p.role === "SELLER") {
+      // send sellers to the seller workspace page
+      router.replace("/seller");
+      return;
+    }
+    // schedule state updates to avoid synchronous setState inside effect for other roles
     setTimeout(() => {
-      setRole(p.role);
+      setRole(p.role as string);
       setPhase("ready");
     }, 0);
   }, [router]);
