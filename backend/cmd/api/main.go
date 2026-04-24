@@ -43,10 +43,13 @@ func main() {
 	authHandlers := controller.NewAuthHandlers(authUC, cfg.UploadDir)
 	adminHandlers := controller.NewAdminHandlers(authUC, cfg.UploadDir)
 	importerHandlers := controller.NewImporterHandlers(shipmentUC, cfg.UploadDir)
+	sellerRepo := repository.NewSellerRepo(pool)
+	sellerUC := usecase.NewSellerUsecase(sellerRepo)
+	sellerHandlers := controller.NewSellerHandlers(sellerUC)
 
 	bootstrapAdmin(ctx, userRepo)
 
-	engine := controller.Router(healthUC, authHandlers, adminHandlers, importerHandlers, cfg.JWTSecret)
+	engine := controller.Router(healthUC, authHandlers, adminHandlers, importerHandlers, sellerHandlers, cfg.JWTSecret)
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

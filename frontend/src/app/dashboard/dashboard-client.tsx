@@ -36,26 +36,20 @@ function workspacePanel(role: string): {
     case "IMPORTER":
       return {
         title: "Your importing workspace",
-        body:
-          "This is where your buying workflows will live. You can manage your account today. Full tools for tracking shipments and paperwork are rolling out next.",
-        hint:
-          "Next step when features go live: create or track a shipment and upload documents in one thread.",
+        body: "This is where your buying workflows will live. You can manage your account today. Full tools for tracking shipments and paperwork are rolling out next.",
+        hint: "Next step when features go live: create or track a shipment and upload documents in one thread.",
       };
     case "SELLER":
       return {
         title: "Your selling workspace",
-        body:
-          "This is where your export workflows will live. You can manage your account today. Listing loads and sharing handoffs with buyers is coming soon.",
-        hint:
-          "Next step when features go live: attach documents to a sale and keep buyers in the same thread.",
+        body: "This is where your export workflows will live. You can manage your account today. Listing loads and sharing handoffs with buyers is coming soon.",
+        hint: "Next step when features go live: attach documents to a sale and keep buyers in the same thread.",
       };
     default:
       return {
         title: "Your portal home",
-        body:
-          "You are signed in for a partner role. Carriers, customs, and ESL staff use this lane to support importers and sellers. More tools for your role will appear here.",
-        hint:
-          "Next step: check with your Ethio-Chain admin if you need a task that is not here yet.",
+        body: "You are signed in for a partner role. Carriers, customs, and ESL staff use this lane to support importers and sellers. More tools for your role will appear here.",
+        hint: "Next step: check with your Ethio-Chain admin if you need a task that is not here yet.",
       };
   }
 }
@@ -69,9 +63,7 @@ export default function DashboardClient() {
     const t = getStoredToken();
     if (!t || isTokenExpired(t)) {
       clearStoredToken();
-      router.replace(
-        `/login?next=${encodeURIComponent("/dashboard")}`
-      );
+      router.replace(`/login?next=${encodeURIComponent("/dashboard")}`);
       return;
     }
     const p = decodeJwtPayload(t);
@@ -84,8 +76,11 @@ export default function DashboardClient() {
       router.replace("/admin");
       return;
     }
-    setRole(p.role);
-    setPhase("ready");
+    // schedule state updates to avoid synchronous setState inside effect
+    setTimeout(() => {
+      setRole(p.role);
+      setPhase("ready");
+    }, 0);
   }, [router]);
 
   function signOut() {

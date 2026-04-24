@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import {
   ShoppingCart,
   Store,
@@ -39,8 +38,7 @@ const roles: RoleCard[] = [
   {
     id: "IMPORTER",
     title: "Importer",
-    hint:
-      "Bring goods through the corridor, track clearance, and keep documents next to each shipment.",
+    hint: "Bring goods through the corridor, track clearance, and keep documents next to each shipment.",
     cta: "Continue as importer",
     icon: ShoppingCart,
     href: "/signup?role=IMPORTER",
@@ -49,8 +47,7 @@ const roles: RoleCard[] = [
   {
     id: "SELLER",
     title: "Seller",
-    hint:
-      "Move cargo toward buyers, share handoffs, and cut mixed signals on what shipped when.",
+    hint: "Move cargo toward buyers, share handoffs, and cut mixed signals on what shipped when.",
     cta: "Continue as seller",
     icon: Store,
     href: "/signup?role=SELLER",
@@ -133,7 +130,9 @@ function RoleCardLink({ role }: { role: RoleCard }) {
       <p className="mt-2 flex-1 text-sm leading-relaxed text-ec-text-secondary">
         {role.hint}
       </p>
-      <span className="mt-4 text-sm font-semibold text-ec-accent">{role.cta}</span>
+      <span className="mt-4 text-sm font-semibold text-ec-accent">
+        {role.cta}
+      </span>
     </Link>
   );
 }
@@ -147,11 +146,13 @@ function rememberRole(id: RoleId) {
 }
 
 export function RoleSelectionContent() {
-  const [lastId, setLastId] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLastId(localStorage.getItem(STORAGE_KEY));
-  }, []);
+  const lastId: string | null = (() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  })();
 
   const lastTitle = titleForId(lastId);
   const lastHref =
@@ -202,7 +203,8 @@ export function RoleSelectionContent() {
             You are registering for an account on the Ethio-Chain logistics
             platform. Pick the role that matches how you work. This is not an
             application to one employer. Each role has its own verification
-            steps. After you choose, you will complete registration for that role.
+            steps. After you choose, you will complete registration for that
+            role.
           </p>
         </div>
 
