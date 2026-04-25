@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Ban,
 } from "lucide-react";
+import Image from "next/image";
 import { API_BASE, apiFetch } from "@/lib/api";
 import { type LoginResponse } from "@/lib/auth-redirect";
 import {
@@ -197,17 +198,7 @@ function Sidebar({
   );
 }
 
-function DocRowSkeleton() {
-  return (
-    <div className="flex animate-pulse items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
-      <div className="h-14 w-14 shrink-0 rounded-lg bg-white/10" />
-      <div className="min-w-0 flex-1 space-y-2">
-        <div className="h-3.5 w-2/5 rounded bg-white/15" />
-        <div className="h-3 w-3/5 rounded bg-white/10" />
-      </div>
-    </div>
-  );
-}
+/* DocRowSkeleton removed — previously unused. */
 
 /** Centered modal workspace: preview stage + filmstrip + side panel (not a side drawer). */
 function ReviewDrawer({
@@ -241,25 +232,35 @@ function ReviewDrawer({
 }) {
   const [selectedDoc, setSelectedDoc] = useState<KYCDoc | null>(null);
   const [checklist, setChecklist] = useState<boolean[]>(() =>
-    VERIFICATION_CHECKLIST.map(() => false)
+    VERIFICATION_CHECKLIST.map(() => false),
   );
   const onPreviewRef = useRef(onPreview);
   const onCloseRef = useRef(onClose);
-  onPreviewRef.current = onPreview;
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onPreviewRef.current = onPreview;
+    onCloseRef.current = onClose;
+  }, [onPreview, onClose]);
 
   const reviewUserId = user ? pendingUserId(user) : "";
   useEffect(() => {
     if (!open || !reviewUserId) return;
-    setChecklist(VERIFICATION_CHECKLIST.map(() => false));
+    // defer state update to avoid synchronous setState inside effect
+    const t = setTimeout(
+      () => setChecklist(VERIFICATION_CHECKLIST.map(() => false)),
+      0,
+    );
+    return () => clearTimeout(t);
   }, [open, reviewUserId]);
 
   useEffect(() => {
     if (docsLoading || !docs || docs.length === 0) return;
-    setSelectedDoc((prev) => {
-      if (prev && docs.some((d) => d.id === prev.id)) return prev;
-      return docs[0];
-    });
+    const t = setTimeout(() => {
+      setSelectedDoc((prev) => {
+        if (prev && docs.some((d) => d.id === prev.id)) return prev;
+        return docs[0];
+      });
+    }, 0);
+    return () => clearTimeout(t);
   }, [docs, docsLoading]);
 
   const selectedDocId = selectedDoc?.id ?? null;
@@ -283,12 +284,13 @@ function ReviewDrawer({
 
   const checklistComplete = checklist.every(Boolean);
 
-  const isImage = (contentType: string) =>
-    contentType.startsWith("image/");
+  const isImage = (contentType: string) => contentType.startsWith("image/");
 
   const created = formatShortDate(user.created_at);
   const previewUrl =
-    selectedDoc && docPreviews[selectedDoc.id] && isImage(selectedDoc.content_type)
+    selectedDoc &&
+    docPreviews[selectedDoc.id] &&
+    isImage(selectedDoc.content_type)
       ? docPreviews[selectedDoc.id]
       : null;
 
@@ -363,14 +365,20 @@ function ReviewDrawer({
                   <p className="text-sm">Loading files…</p>
                 </div>
               ) : previewUrl && selectedDoc ? (
-                <img
+                <Image
                   src={previewUrl}
                   alt={selectedDoc.original_file_name}
+                  width={1200}
+                  height={800}
                   className="max-h-[min(50vh,420px)] w-full max-w-full rounded-lg object-contain shadow-2xl ring-1 ring-white/10"
                 />
               ) : selectedDoc && !isImage(selectedDoc.content_type) ? (
                 <div className="flex max-w-md flex-col items-center rounded-2xl border border-white/10 bg-white/5 px-8 py-10 text-center">
-                  <FileText className="text-slate-400" size={40} strokeWidth={1.2} />
+                  <FileText
+                    className="text-slate-400"
+                    size={40}
+                    strokeWidth={1.2}
+                  />
                   <p className="mt-3 text-sm font-medium text-white">
                     Preview not available
                   </p>
@@ -423,9 +431,11 @@ function ReviewDrawer({
                       >
                         <div className="flex h-16 w-20 items-center justify-center bg-white/5 sm:h-[72px] sm:w-[96px]">
                           {thumb ? (
-                            <img
+                            <Image
                               src={thumb}
                               alt=""
+                              width={96}
+                              height={72}
                               className="h-full w-full object-cover"
                             />
                           ) : (
@@ -434,7 +444,9 @@ function ReviewDrawer({
                         </div>
                         <span
                           className={`absolute bottom-0 left-0 right-0 truncate px-1 py-0.5 text-[9px] font-medium ${
-                            active ? "bg-ec-accent/95 text-white" : "bg-black/50 text-slate-300"
+                            active
+                              ? "bg-ec-accent/95 text-white"
+                              : "bg-black/50 text-slate-300"
                           }`}
                         >
                           {d.doc_type.replace(/_/g, " ")}
@@ -611,7 +623,7 @@ export default function AdminPage() {
     try {
       const res = await apiFetch<{ items: PendingUser[] }>(
         "/api/v1/admin/pending-approvals?limit=200",
-        { token: t }
+        { token: t },
       );
       setPending(res.items ?? []);
       setIsLoggedIn(true);
@@ -667,7 +679,7 @@ export default function AdminPage() {
     try {
       const res = await apiFetch<{ items: KYCDoc[] }>(
         `/api/v1/admin/users/${pendingUserId(u)}/docs`,
-        { token: t }
+        { token: t },
       );
       const docList = res.items ?? [];
       setDocs(docList);
@@ -717,10 +729,13 @@ export default function AdminPage() {
     setActionLoading(true);
     const t = getToken();
     try {
-      await apiFetch(`/api/v1/admin/users/${pendingUserId(selectedUser)}/approve`, {
-        method: "POST",
-        token: t,
-      });
+      await apiFetch(
+        `/api/v1/admin/users/${pendingUserId(selectedUser)}/approve`,
+        {
+          method: "POST",
+          token: t,
+        },
+      );
       setDrawerOpen(false);
       setSelectedUser(null);
       setDocs([]);
@@ -742,10 +757,13 @@ export default function AdminPage() {
     setActionLoading(true);
     const t = getToken();
     try {
-      await apiFetch(`/api/v1/admin/users/${pendingUserId(selectedUser)}/deny`, {
-        method: "POST",
-        token: t,
-      });
+      await apiFetch(
+        `/api/v1/admin/users/${pendingUserId(selectedUser)}/deny`,
+        {
+          method: "POST",
+          token: t,
+        },
+      );
       setDrawerOpen(false);
       setSelectedUser(null);
       setDocs([]);
@@ -767,10 +785,13 @@ export default function AdminPage() {
     setActionLoading(true);
     const t = getToken();
     try {
-      await apiFetch(`/api/v1/admin/users/${pendingUserId(selectedUser)}/request-info`, {
-        method: "POST",
-        token: t,
-      });
+      await apiFetch(
+        `/api/v1/admin/users/${pendingUserId(selectedUser)}/request-info`,
+        {
+          method: "POST",
+          token: t,
+        },
+      );
       toast("We asked the user for more information.", "success");
     } catch (e: unknown) {
       const msg = errorMessage(e) ?? "Could not send the information request.";
@@ -808,7 +829,7 @@ export default function AdminPage() {
     if (!res.ok) {
       toast(
         `We could not download that file (error ${res.status}). Try again.`,
-        "error"
+        "error",
       );
       return;
     }
@@ -906,8 +927,8 @@ export default function AdminPage() {
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-ec-text-secondary">
               Review KYC uploads and activate accounts for the Ethio-Chain
-              platform. Importers and sellers register first; partners follow the
-              same flow.
+              platform. Importers and sellers register first; partners follow
+              the same flow.
             </p>
           </div>
           <Link
@@ -996,9 +1017,7 @@ export default function AdminPage() {
           <div className="overflow-hidden rounded-2xl border border-ec-border bg-ec-card shadow-md">
             <div className="flex flex-col gap-4 border-b border-ec-border bg-ec-surface-raised/80 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <div>
-                <h2 className="text-lg font-bold text-ec-text">
-                  Queue
-                </h2>
+                <h2 className="text-lg font-bold text-ec-text">Queue</h2>
                 <p className="mt-0.5 text-sm text-ec-text-secondary">
                   <span className="font-semibold tabular-nums text-ec-text">
                     {pending?.length ?? 0}
@@ -1016,9 +1035,7 @@ export default function AdminPage() {
                 >
                   <RefreshCw
                     size={16}
-                    className={
-                      queueRefreshing ? "animate-spin" : ""
-                    }
+                    className={queueRefreshing ? "animate-spin" : ""}
                     aria-hidden
                   />
                   {queueRefreshing ? "Refreshing…" : "Refresh queue"}

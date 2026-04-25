@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LogOut, LayoutDashboard } from "lucide-react";
+import { LogOut, LayoutDashboard, Bell } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { PortalHeader } from "@/components/layout/PortalHeader";
 import { clearStoredToken, getStoredToken } from "@/lib/auth-storage";
+import SellerWorkspace from "@/components/dashboard/SellerWorkspace";
 import { decodeJwtPayload, isTokenExpired } from "@/lib/jwt";
 import { ImporterWorkspace } from "./importer-workspace";
 
@@ -36,29 +37,30 @@ function workspacePanel(role: string): {
     case "IMPORTER":
       return {
         title: "Your importing workspace",
-        body:
-          "This is where your buying workflows will live. You can manage your account today. Full tools for tracking shipments and paperwork are rolling out next.",
-        hint:
-          "Next step when features go live: create or track a shipment and upload documents in one thread.",
+        body: "This is where your buying workflows will live. You can manage your account today. Full tools for tracking shipments and paperwork are rolling out next.",
+        hint: "Next step when features go live: create or track a shipment and upload documents in one thread.",
       };
     case "SELLER":
       return {
         title: "Your selling workspace",
-        body:
-          "This is where your export workflows will live. You can manage your account today. Listing loads and sharing handoffs with buyers is coming soon.",
-        hint:
-          "Next step when features go live: attach documents to a sale and keep buyers in the same thread.",
+        body: "This is where your export workflows will live. You can manage your account today. Listing loads and sharing handoffs with buyers is coming soon.",
+        hint: "Next step when features go live: attach documents to a sale and keep buyers in the same thread.",
       };
     default:
       return {
         title: "Your portal home",
-        body:
-          "You are signed in for a partner role. Carriers, customs, and ESL staff use this lane to support importers and sellers. More tools for your role will appear here.",
-        hint:
-          "Next step: check with your Ethio-Chain admin if you need a task that is not here yet.",
+        body: "You are signed in for a partner role. Carriers, customs, and ESL staff use this lane to support importers and sellers. More tools for your role will appear here.",
+        hint: "Next step: check with your Ethio-Chain admin if you need a task that is not here yet.",
       };
   }
 }
+
+type Notification = {
+  id: string;
+  type: string;
+  payload?: unknown;
+  created_at?: string;
+};
 
 export default function DashboardClient() {
   const router = useRouter();
@@ -69,9 +71,7 @@ export default function DashboardClient() {
     const t = getStoredToken();
     if (!t || isTokenExpired(t)) {
       clearStoredToken();
-      router.replace(
-        `/login?next=${encodeURIComponent("/dashboard")}`
-      );
+      router.replace(`/login?next=${encodeURIComponent("/dashboard")}`);
       return;
     }
     const p = decodeJwtPayload(t);
@@ -84,13 +84,51 @@ export default function DashboardClient() {
       router.replace("/admin");
       return;
     }
-    setRole(p.role);
-    setPhase("ready");
+    if (p.role === "SELLER") {
+      // render the seller workspace inside dashboard rather than redirecting
+      setTimeout(() => {
+        setRole(p.role as string);
+        setPhase("ready");
+      }, 0);
+      return;
+    }
+    // schedule state updates to avoid synchronous setState inside effect for other roles
+    setTimeout(() => {
+      setRole(p.role as string);
+      setPhase("ready");
+    }, 0);
   }, [router]);
 
   function signOut() {
     clearStoredToken();
     router.push("/");
+  }
+
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifLoading, setNotifLoading] = useState(false);
+
+  async function fetchNotifications() {
+    setNotifLoading(true);
+    try {
+      const token = getStoredToken();
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8080";
+      const res = await fetch(`${baseUrl}/api/v1/seller/notifications`, {
+        headers,
+      });
+      if (!res.ok) return setNotifications([]);
+      const j = await res.json();
+      setNotifications(
+        Array.isArray(j.items) ? (j.items as Notification[]) : [],
+      );
+    } catch (err) {
+      console.error("fetch notifications", err);
+      setNotifications([]);
+    } finally {
+      setNotifLoading(false);
+    }
   }
 
   const panel = role ? workspacePanel(role) : null;
@@ -113,6 +151,57 @@ export default function DashboardClient() {
         subtitle={role ? `Signed in as ${roleTitle(role)}` : undefined}
         actions={
           <>
+            <div className="relative inline-block">
+              <button
+                type="button"
+                aria-label="Notifications"
+                onClick={async () => {
+                  if (!notifOpen) await fetchNotifications();
+                  setNotifOpen(!notifOpen);
+                }}
+                className="inline-flex items-center justify-center rounded-lg p-2 text-ec-text hover:bg-ec-surface"
+              >
+                <Bell size={18} aria-hidden />
+              </button>
+              {notifOpen && (
+                <div className="absolute right-0 mt-2 w-80 z-50">
+                  <div className="ec-card p-3">
+                    <h4 className="mb-2 text-sm font-semibold">
+                      Notifications
+                    </h4>
+                    {notifLoading ? (
+                      <p className="text-sm text-ec-text-muted">Loading…</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {notifications.length === 0 ? (
+                          <p className="text-sm text-ec-text-muted">
+                            No new notifications
+                          </p>
+                        ) : (
+                          notifications.map((n: Notification) => (
+                            <div
+                              key={n.id}
+                              className="border-b border-ec-border pb-2 last:border-0"
+                            >
+                              <p className="text-sm font-medium">
+                                {n.type.replaceAll("_", " ")}
+                              </p>
+                              {!!n.payload && (
+                                <p className="text-xs text-ec-text-secondary mt-1 truncate">
+                                  {typeof n.payload === "string"
+                                    ? n.payload
+                                    : JSON.stringify(n.payload)}
+                                </p>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <Link
               href="/role-selection"
               className="hidden rounded-lg px-3 py-2 text-sm font-medium text-ec-text-secondary hover:bg-ec-surface hover:text-ec-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent sm:inline"
@@ -133,6 +222,10 @@ export default function DashboardClient() {
 
       {role === "IMPORTER" ? (
         <ImporterWorkspace />
+      ) : role === "SELLER" ? (
+        <div className="mx-auto w-full  flex-1 px-4 py-10 md:px-8">
+          <SellerWorkspace />
+        </div>
       ) : (
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 md:px-8">
           <div className="ec-card border-ec-border shadow-md">

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
@@ -294,6 +295,73 @@ LIMIT $1
 	return out, nil
 }
 
+func (r *UserRepo) ListSellers(ctx context.Context, query string, limit int) ([]domain.User, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 50
+	}
+	q := `
+SELECT
+  id, email, role, status,
+  full_name, phone,
+  business_name, vat_number,
+  company_address, origin_country,
+  truck_id, carrier_company,
+  employee_id, branch_office,
+  department, staff_code,
+  created_at, updated_at
+FROM users
+WHERE role = 'SELLER' AND (business_name ILIKE $1 OR email ILIKE $1)
+ORDER BY business_name ASC NULLS LAST
+LIMIT $2
+`
+	arg := "%" + strings.TrimSpace(query) + "%"
+	rows, err := r.pool.inner.Query(ctx, q, arg, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list sellers: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]domain.User, 0)
+	for rows.Next() {
+		var u domain.User
+		var role, status string
+		var fullName, phone, businessName, vatNumber *string
+		var companyAddress, originCountry, truckID, carrierCompany *string
+		var employeeID, branchOffice, department, staffCode *string
+		if err := rows.Scan(
+			&u.ID, &u.Email, &role, &status,
+			&fullName, &phone,
+			&businessName, &vatNumber,
+			&companyAddress, &originCountry,
+			&truckID, &carrierCompany,
+			&employeeID, &branchOffice,
+			&department, &staffCode,
+			&u.CreatedAt, &u.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan seller: %w", err)
+		}
+		u.Role = domain.UserRole(role)
+		u.Status = domain.UserStatus(status)
+		u.FullName = deref(fullName)
+		u.Phone = deref(phone)
+		u.BusinessName = deref(businessName)
+		u.VATNumber = deref(vatNumber)
+		u.CompanyAddress = deref(companyAddress)
+		u.OriginCountry = deref(originCountry)
+		u.TruckID = deref(truckID)
+		u.CarrierCompany = deref(carrierCompany)
+		u.EmployeeID = deref(employeeID)
+		u.BranchOffice = deref(branchOffice)
+		u.Department = deref(department)
+		u.StaffCode = deref(staffCode)
+		out = append(out, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate sellers: %w", err)
+	}
+	return out, nil
+}
+
 func nullIfEmpty(s string) any {
 	if s == "" {
 		return nil
@@ -318,4 +386,3 @@ func deref(s *string) string {
 	}
 	return *s
 }
-

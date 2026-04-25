@@ -132,11 +132,15 @@ func (r *ShipmentRepo) GetImporterShipmentDetail(ctx context.Context, importerID
 	if err != nil {
 		return domain.ShipmentDetail{}, err
 	}
+	sellerDocs, err := r.listSellerDocuments(ctx, shipmentID)
+	if err != nil {
+		return domain.ShipmentDetail{}, err
+	}
 	events, err := r.listEvents(ctx, shipmentID)
 	if err != nil {
 		return domain.ShipmentDetail{}, err
 	}
-	return domain.ShipmentDetail{Shipment: s, Documents: docs, Events: events}, nil
+	return domain.ShipmentDetail{Shipment: s, Documents: docs, SellerDocuments: sellerDocs, Events: events}, nil
 }
 
 func (r *ShipmentRepo) AddShipmentDocuments(ctx context.Context, importerID, shipmentID string, docs []domain.ShipmentDocument) (domain.ShipmentDetail, error) {
@@ -166,7 +170,7 @@ FOR UPDATE
 	}
 
 	switch current.Status {
-	case domain.ShipmentStatusInitiated, domain.ShipmentStatusDocsUploaded, domain.ShipmentStatusPendingVerification:
+	case domain.ShipmentStatusInitiated, domain.ShipmentStatusDocsUploaded, domain.ShipmentStatusPendingVerification, domain.ShipmentStatusRejected:
 	default:
 		return domain.ShipmentDetail{}, fmt.Errorf("%w: shipment is no longer editable", domain.ErrValidation)
 	}
@@ -203,7 +207,7 @@ RETURNING id, uploaded_at
 
 	originalStatus := current.Status
 	nextStatus := current.Status
-	if current.Status == domain.ShipmentStatusInitiated {
+	if current.Status == domain.ShipmentStatusInitiated || current.Status == domain.ShipmentStatusRejected {
 		hasRequired, err := r.hasRequiredImporterDocs(ctx, tx, shipmentID)
 		if err != nil {
 			return domain.ShipmentDetail{}, err
@@ -287,6 +291,27 @@ WHERE d.id = $1 AND d.shipment_id = $2 AND s.importer_id = $3
 	return d, nil
 }
 
+func (r *ShipmentRepo) GetImporterSellerDocument(ctx context.Context, importerID, shipmentID, docID string) (domain.SellerDocument, error) {
+	const q = `
+SELECT
+  d.id, d.shipment_id, d.seller_id,
+  d.doc_type, d.original_file_name, d.content_type,
+  d.size_bytes, d.storage_key, d.sha256_hash, d.uploaded_at
+FROM seller_documents d
+JOIN shipments s ON s.id = d.shipment_id
+WHERE d.id = $1 AND d.shipment_id = $2 AND s.importer_id = $3
+`
+	row := r.pool.inner.QueryRow(ctx, q, docID, shipmentID, importerID)
+	var d domain.SellerDocument
+	if err := row.Scan(&d.ID, &d.ShipmentID, &d.SellerID, &d.DocType, &d.OriginalFileName, &d.ContentType, &d.SizeBytes, &d.StorageKey, &d.SHA256Hash, &d.UploadedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.SellerDocument{}, domain.ErrNotFound
+		}
+		return domain.SellerDocument{}, fmt.Errorf("get importer seller document: %w", err)
+	}
+	return d, nil
+}
+
 func (r *ShipmentRepo) getImporterShipment(ctx context.Context, importerID, shipmentID string) (domain.Shipment, error) {
 	const q = `
 SELECT
@@ -336,6 +361,33 @@ ORDER BY uploaded_at ASC
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate shipment documents: %w", err)
+	}
+	return out, nil
+}
+
+func (r *ShipmentRepo) listSellerDocuments(ctx context.Context, shipmentID string) ([]domain.SellerDocument, error) {
+	const q = `
+SELECT id, shipment_id, seller_id, doc_type, original_file_name, content_type, size_bytes, storage_key, sha256_hash, uploaded_at
+FROM seller_documents
+WHERE shipment_id = $1
+ORDER BY uploaded_at ASC
+`
+	rows, err := r.pool.inner.Query(ctx, q, shipmentID)
+	if err != nil {
+		return nil, fmt.Errorf("list seller documents: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]domain.SellerDocument, 0)
+	for rows.Next() {
+		var d domain.SellerDocument
+		if err := rows.Scan(&d.ID, &d.ShipmentID, &d.SellerID, &d.DocType, &d.OriginalFileName, &d.ContentType, &d.SizeBytes, &d.StorageKey, &d.SHA256Hash, &d.UploadedAt); err != nil {
+			return nil, fmt.Errorf("scan seller document: %w", err)
+		}
+		out = append(out, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate seller documents: %w", err)
 	}
 	return out, nil
 }
