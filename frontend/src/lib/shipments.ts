@@ -11,6 +11,8 @@ export type ShipmentStatus =
   | "ARRIVED"
   | "AT_CUSTOMS"
   | "HELD_FOR_INSPECTION"
+  | "EXPORT_DOCS_UPLOADED"
+  | "REJECTED"
   | "CLEARED";
 
 export type AnchorStatus = "PENDING" | "ANCHORED" | "FAILED";
@@ -60,6 +62,19 @@ export type ShipmentDocument = {
   uploaded_at: string;
 };
 
+export type SellerDocument = {
+  id: string;
+  shipment_id: string;
+  seller_id: string;
+  doc_type: string;
+  original_file_name: string;
+  content_type: string;
+  size_bytes: number;
+  storage_key: string;
+  sha256_hash: string;
+  uploaded_at: string;
+};
+
 export type ShipmentEvent = {
   id: string;
   shipment_id: string;
@@ -80,11 +95,13 @@ export type ShipmentEvent = {
 export type ShipmentDetail = {
   shipment: Shipment;
   documents: ShipmentDocument[];
+  seller_documents: SellerDocument[];
   events: ShipmentEvent[];
 };
 
 type ShipmentDetailResponse = Omit<ShipmentDetail, "documents" | "events"> & {
   documents?: ShipmentDocument[] | null;
+  seller_documents?: SellerDocument[] | null;
   events?: ShipmentEvent[] | null;
 };
 
@@ -151,10 +168,20 @@ export function shipmentDocumentDownloadUrl(
   return `${API_BASE}/api/v1/importer/shipments/${shipmentID}/documents/${documentID}/download`;
 }
 
+export function sellerShipmentDocumentDownloadUrl(
+  shipmentID: string,
+  documentID: string
+): string {
+  return `${API_BASE}/api/v1/importer/shipments/${shipmentID}/seller-documents/${documentID}/download`;
+}
+
 function normalizeShipmentDetail(detail: ShipmentDetailResponse): ShipmentDetail {
   return {
     ...detail,
     documents: Array.isArray(detail.documents) ? detail.documents : [],
+    seller_documents: Array.isArray(detail.seller_documents)
+      ? detail.seller_documents
+      : [],
     events: Array.isArray(detail.events) ? detail.events : [],
   };
 }

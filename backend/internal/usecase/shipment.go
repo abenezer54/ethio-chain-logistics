@@ -17,6 +17,7 @@ type ShipmentRepository interface {
 	GetImporterShipmentDetail(ctx context.Context, importerID, shipmentID string) (domain.ShipmentDetail, error)
 	AddShipmentDocuments(ctx context.Context, importerID, shipmentID string, docs []domain.ShipmentDocument) (domain.ShipmentDetail, error)
 	GetImporterShipmentDocument(ctx context.Context, importerID, shipmentID, docID string) (domain.ShipmentDocument, error)
+	GetImporterSellerDocument(ctx context.Context, importerID, shipmentID, docID string) (domain.SellerDocument, error)
 }
 
 type ShipmentUsecase struct {
@@ -198,6 +199,16 @@ func (u *ShipmentUsecase) GetImporterShipmentDocument(ctx context.Context, impor
 		return domain.ShipmentDocument{}, fmt.Errorf("%w: importer id, shipment id, and document id are required", domain.ErrValidation)
 	}
 	return u.shipments.GetImporterShipmentDocument(ctx, strings.TrimSpace(importerID), strings.TrimSpace(shipmentID), strings.TrimSpace(docID))
+}
+
+func (u *ShipmentUsecase) GetImporterSellerDocument(ctx context.Context, importerID string, actorRole domain.UserRole, shipmentID, docID string) (domain.SellerDocument, error) {
+	if actorRole != domain.RoleImporter {
+		return domain.SellerDocument{}, domain.ErrForbidden
+	}
+	if strings.TrimSpace(importerID) == "" || strings.TrimSpace(shipmentID) == "" || strings.TrimSpace(docID) == "" {
+		return domain.SellerDocument{}, fmt.Errorf("%w: importer id, shipment id, and document id are required", domain.ErrValidation)
+	}
+	return u.shipments.GetImporterSellerDocument(ctx, strings.TrimSpace(importerID), strings.TrimSpace(shipmentID), strings.TrimSpace(docID))
 }
 
 func validatePositiveDecimal(value, field string) error {

@@ -212,14 +212,11 @@ func writeError(c *gin.Context, err error) {
 	default:
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23514" {
-			// check_violation — e.g. status DENIED not allowed until DB migration 00003
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error":  "database constraint rejected this update",
-				"detail": pgErr.Message,
+				"error": "Unable to process this update. Please try again.",
 			})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 	}
 }
-

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -45,11 +46,38 @@ func main() {
 	importerHandlers := controller.NewImporterHandlers(shipmentUC, cfg.UploadDir)
 	sellerRepo := repository.NewSellerRepo(pool)
 	sellerUC := usecase.NewSellerUsecase(sellerRepo)
-	sellerHandlers := controller.NewSellerHandlers(sellerUC)
+	sellerHandlers := controller.NewSellerHandlers(sellerUC, cfg.UploadDir)
 
 	bootstrapAdmin(ctx, userRepo)
 
 	engine := controller.Router(healthUC, authHandlers, adminHandlers, importerHandlers, sellerHandlers, cfg.JWTSecret)
+
+	// Public lookup for sellers (used by importer UI autocomplete)
+	engine.GET("/api/v1/sellers", func(c *gin.Context) {
+		q := c.Query("query")
+		limit := 20
+		if v := c.Query("limit"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				limit = n
+			}
+		}
+		items, err := userRepo.ListSellers(c.Request.Context(), q, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		// return minimal fields including origin_country
+		out := make([]gin.H, 0, len(items))
+		for _, u := range items {
+			out = append(out, gin.H{"id": u.ID, "email": u.Email, "business_name": u.BusinessName, "origin_country": u.OriginCountry})
+		}
+		c.JSON(http.StatusOK, gin.H{"items": out})
+	})
+
+	// Debug: log all registered routes so we can confirm the sellers route is present
+	for _, rt := range engine.Routes() {
+		log.Printf("ROUTE %s %s", rt.Method, rt.Path)
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

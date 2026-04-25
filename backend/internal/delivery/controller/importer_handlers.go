@@ -38,6 +38,7 @@ func (h *ImporterHandlers) RegisterRoutes(v1 *gin.RouterGroup, jwtSecret string)
 	importer.GET("/shipments/:id", h.getShipment)
 	importer.POST("/shipments/:id/documents", h.uploadDocuments)
 	importer.GET("/shipments/:id/documents/:docID/download", h.downloadDocument)
+	importer.GET("/shipments/:id/seller-documents/:docID/download", h.downloadSellerDocument)
 }
 
 func (h *ImporterHandlers) listShipments(c *gin.Context) {
@@ -140,6 +141,26 @@ func (h *ImporterHandlers) uploadDocuments(c *gin.Context) {
 
 func (h *ImporterHandlers) downloadDocument(c *gin.Context) {
 	doc, err := h.shipments.GetImporterShipmentDocument(c.Request.Context(), currentUserID(c), currentUserRole(c), c.Param("id"), c.Param("docID"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	path := filepath.Join(h.uploadDir, doc.StorageKey)
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	c.Header("Content-Type", doc.ContentType)
+	c.Header("Content-Disposition", `inline; filename="`+sanitizeFilename(doc.OriginalFileName)+`"`)
+	c.File(path)
+}
+
+func (h *ImporterHandlers) downloadSellerDocument(c *gin.Context) {
+	doc, err := h.shipments.GetImporterSellerDocument(c.Request.Context(), currentUserID(c), currentUserRole(c), c.Param("id"), c.Param("docID"))
 	if err != nil {
 		writeError(c, err)
 		return

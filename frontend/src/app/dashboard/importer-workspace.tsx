@@ -25,6 +25,7 @@ import {
   getImporterShipment,
   listImporterShipments,
   shipmentDocumentDownloadUrl,
+  sellerShipmentDocumentDownloadUrl,
   uploadShipmentDocuments,
   type CreateShipmentPayload,
   type DocumentVerificationStatus,
@@ -34,12 +35,21 @@ import {
   type ShipmentEvent,
   type ShipmentStatus,
 } from "@/lib/shipments";
+import { API_BASE } from "@/lib/api";
+// replaced SellerSelector with country + seller dropdowns
+type SellerOption = {
+  id: string;
+  business_name?: string;
+  email?: string;
+  origin_country?: string;
+};
 
 const STATUS_STEPS: ShipmentStatus[] = [
   "INITIATED",
   "DOCS_UPLOADED",
   "PENDING_VERIFICATION",
   "VERIFIED",
+  "EXPORT_DOCS_UPLOADED",
   "APPROVED",
   "ALLOCATED",
   "IN_TRANSIT",
@@ -59,6 +69,8 @@ const STATUS_LABEL: Record<ShipmentStatus, string> = {
   ARRIVED: "Arrived",
   AT_CUSTOMS: "At customs",
   HELD_FOR_INSPECTION: "Held for inspection",
+  EXPORT_DOCS_UPLOADED: "Seller uploaded documents",
+  REJECTED: "Rejected - Re-upload required",
   CLEARED: "Cleared",
 };
 
@@ -114,8 +126,10 @@ function statusTone(status: ShipmentStatus): string {
     case "CLEARED":
     case "VERIFIED":
     case "APPROVED":
+    case "EXPORT_DOCS_UPLOADED":
       return "border-emerald-200 bg-emerald-50 text-emerald-800";
     case "HELD_FOR_INSPECTION":
+    case "REJECTED":
       return "border-red-200 bg-red-50 text-red-800";
     case "IN_TRANSIT":
     case "ALLOCATED":
@@ -173,7 +187,9 @@ function ShipmentCard({
       type="button"
       onClick={onSelect}
       className={`w-full rounded-lg border bg-ec-card p-4 text-left shadow-sm transition-colors hover:border-ec-border-strong hover:bg-ec-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent ${
-        selected ? "border-ec-accent ring-1 ring-ec-accent/30" : "border-ec-border"
+        selected
+          ? "border-ec-accent ring-1 ring-ec-accent/30"
+          : "border-ec-border"
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -218,6 +234,47 @@ function CreateShipmentForm({
     volume_cbm: "",
     seller_id: "",
   });
+
+  const [allSellers, setAllSellers] = useState<
+    {
+      id: string;
+      business_name?: string;
+      email?: string;
+      origin_country?: string;
+    }[]
+  >([]);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [selectedCountry, setSelectedCountry] = useState<string>("");
+
+  useEffect(() => {
+    let mounted = true;
+    fetch(`${API_BASE}/api/v1/sellers?limit=500`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (!mounted) return;
+        const items = Array.isArray(j.items) ? j.items : [];
+        const itemsArr = items as SellerOption[];
+        const normalized = itemsArr.map((s) => ({
+          ...s,
+          origin_country: (s.origin_country || "").trim(),
+        }));
+        setAllSellers(normalized);
+        const uniq = Array.from(
+          new Set(
+            normalized.map((s) => s.origin_country || "").filter(Boolean),
+          ),
+        ).sort();
+        setCountries(uniq);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setAllSellers([]);
+        setCountries([]);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   function setField(key: keyof CreateShipmentPayload, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -319,18 +376,61 @@ function CreateShipmentForm({
           />
         </label>
         <label className="block">
-          <span className="ec-label">Seller ID</span>
-          <input
+          <span className="ec-label">Seller country</span>
+          <select
+            className="ec-input mt-1"
+            value={selectedCountry}
+            onChange={(e) => {
+              setSelectedCountry(e.target.value);
+              // clear seller selection when country changes
+              setField("seller_id", "");
+            }}
+            disabled={busy}
+          >
+            <option value="">All countries</option>
+            {countries.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <p className="mt-2 text-xs text-ec-text-muted">
+            Filter sellers by country
+          </p>
+        </label>
+
+        <label className="block">
+          <span className="ec-label">Seller</span>
+          <select
             className="ec-input mt-1"
             value={form.seller_id}
             onChange={(e) => setField("seller_id", e.target.value)}
-            placeholder="Optional"
             disabled={busy}
-          />
+          >
+            <option value="">Select seller</option>
+            {allSellers
+              .filter((s) =>
+                selectedCountry
+                  ? (s.origin_country || "") === selectedCountry
+                  : true,
+              )
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.business_name || s.email || s.id}
+                </option>
+              ))}
+          </select>
+          <p className="mt-1 text-xs text-ec-text-muted">
+            Select the seller from the list.
+          </p>
         </label>
       </div>
 
-      <button type="submit" disabled={busy} className="ec-btn-primary mt-5 w-full">
+      <button
+        type="submit"
+        disabled={busy || !(form.seller_id && form.seller_id.trim())}
+        className="ec-btn-primary mt-5 w-full"
+      >
         {busy ? (
           <>
             <Spinner size="sm" label="Creating shipment" />
@@ -371,7 +471,10 @@ function DocumentUploadForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="rounded-lg border border-ec-border bg-ec-surface-raised p-4">
+    <form
+      onSubmit={onSubmit}
+      className="rounded-lg border border-ec-border bg-ec-surface-raised p-4"
+    >
       <div className="flex items-center gap-2">
         <Upload size={18} className="text-ec-accent" aria-hidden />
         <h3 className="font-bold text-ec-text">Upload documents</h3>
@@ -449,14 +552,28 @@ function ProgressSteps({ status }: { status: ShipmentStatus }) {
   );
 }
 
+type ShipmentFileItem = {
+  id: string;
+  shipment_id: string;
+  doc_type: string;
+  original_file_name: string;
+  content_type: string;
+  size_bytes: number;
+  sha256_hash: string;
+  uploaded_at: string;
+  verification_status?: DocumentVerificationStatus;
+};
+
 function DocumentsList({
   shipmentID,
   documents,
   token,
+  downloadUrl,
 }: {
   shipmentID: string;
-  documents: ShipmentDocument[];
+  documents: ShipmentFileItem[];
   token: string;
+  downloadUrl: (shipmentID: string, documentID: string) => string;
 }) {
   if (!documents || documents.length === 0) {
     return (
@@ -475,13 +592,16 @@ function DocumentsList({
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="font-semibold text-ec-text">{DOC_LABEL[doc.doc_type]}</p>
+              <p className="font-semibold text-ec-text">
+                {DOC_LABEL[doc.doc_type as keyof typeof DOC_LABEL] ||
+                  doc.doc_type}
+              </p>
               <p className="mt-1 truncate text-sm text-ec-text-secondary">
                 {doc.original_file_name}
               </p>
             </div>
             <a
-              href={shipmentDocumentDownloadUrl(shipmentID, doc.id)}
+              href={downloadUrl(shipmentID, doc.id)}
               target="_blank"
               rel="noreferrer"
               className="ec-btn-ghost border border-ec-border bg-ec-card"
@@ -496,9 +616,13 @@ function DocumentsList({
           <div className="mt-3 grid gap-2 text-xs text-ec-text-muted sm:grid-cols-3">
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck size={14} aria-hidden />
-              <span className={verificationTone(doc.verification_status)}>
-                {doc.verification_status}
-              </span>
+              {doc.verification_status ? (
+                <span className={verificationTone(doc.verification_status)}>
+                  {doc.verification_status}
+                </span>
+              ) : (
+                <span className="text-ec-text-muted">Seller uploaded</span>
+              )}
             </span>
             <span>{formatBytes(doc.size_bytes)}</span>
             <span>{formatDate(doc.uploaded_at)}</span>
@@ -513,6 +637,19 @@ function DocumentsList({
   );
 }
 
+// Helper function to safely convert unknown to string for rendering
+function safeString(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return value.toString();
+  if (typeof value === "boolean") return value.toString();
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "";
+  }
+}
+
 function Timeline({ events }: { events: ShipmentEvent[] }) {
   if (!events || events.length === 0) {
     return (
@@ -524,25 +661,71 @@ function Timeline({ events }: { events: ShipmentEvent[] }) {
 
   return (
     <ol className="space-y-3">
-      {events.map((event) => (
-        <li key={event.id} className="rounded-lg border border-ec-border bg-ec-card p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="font-semibold text-ec-text">
-              {event.action.replaceAll("_", " ")}
+      {events.map((event) => {
+        // Safely extract values with type guards
+        const action = safeString(event.action);
+        const isRejection =
+          action === "SHIPMENT_REJECTED" ||
+          safeString(event.to_status) === "REJECTED";
+        const message = event.message ? safeString(event.message) : null;
+        const actorRole = safeString(event.actor_role);
+        const toStatus = event.to_status ? safeString(event.to_status) : null;
+        const rejectionReason = event.metadata?.reason
+          ? safeString(event.metadata.reason)
+          : null;
+
+        return (
+          <li
+            key={safeString(event.id)}
+            className={`rounded-lg border p-4 ${
+              isRejection
+                ? "border-red-200 bg-red-50"
+                : "border-ec-border bg-ec-card"
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p
+                className={`font-semibold ${
+                  isRejection ? "text-red-700" : "text-ec-text"
+                }`}
+              >
+                {action.replaceAll("_", " ")}
+              </p>
+              <span
+                className={`text-xs ${isRejection ? "text-red-600" : "text-ec-text-muted"}`}
+              >
+                {formatDate(safeString(event.created_at))}
+              </span>
+            </div>
+            {message && (
+              <p
+                className={`mt-1 text-sm ${
+                  isRejection
+                    ? "text-red-700 font-semibold"
+                    : "text-ec-text-secondary"
+                }`}
+              >
+                {message}
+              </p>
+            )}
+            {isRejection && rejectionReason && (
+              <div className="mt-2 border-t border-red-200 pt-2">
+                <p className="text-xs font-semibold text-red-700 mb-1">
+                  Reason for rejection:
+                </p>
+                <p className="text-sm text-red-700">{rejectionReason}</p>
+              </div>
+            )}
+            <p
+              className={`mt-2 text-xs ${isRejection ? "text-red-600" : "text-ec-text-muted"}`}
+            >
+              {actorRole}
+              {toStatus &&
+                ` -> ${STATUS_LABEL[toStatus as ShipmentStatus] || toStatus}`}
             </p>
-            <span className="text-xs text-ec-text-muted">
-              {formatDate(event.created_at)}
-            </span>
-          </div>
-          {event.message ? (
-            <p className="mt-1 text-sm text-ec-text-secondary">{event.message}</p>
-          ) : null}
-          <p className="mt-2 text-xs text-ec-text-muted">
-            {event.actor_role}
-            {event.to_status ? ` -> ${STATUS_LABEL[event.to_status]}` : ""}
-          </p>
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -567,16 +750,20 @@ function ShipmentDetailPanel({
       <div className="ec-card rounded-lg">
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <Route size={36} className="text-ec-text-muted" aria-hidden />
-          <h2 className="mt-4 text-lg font-bold text-ec-text">Select a shipment</h2>
+          <h2 className="mt-4 text-lg font-bold text-ec-text">
+            Select a shipment
+          </h2>
           <p className="mt-2 max-w-md text-sm text-ec-text-secondary">
-            Open a shipment to view document status, cargo details, and audit timeline.
+            Open a shipment to view document status, cargo details, and audit
+            timeline.
           </p>
         </div>
       </div>
     );
   }
 
-  const { shipment, documents, events } = detail;
+  const { shipment, documents, seller_documents, events } = detail;
+  const showSellerDocuments = seller_documents && seller_documents.length > 0;
 
   return (
     <div className="space-y-5">
@@ -612,21 +799,33 @@ function ShipmentDetailPanel({
 
         <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-lg border border-ec-border bg-ec-surface-raised p-3">
-            <p className="text-xs font-semibold uppercase text-ec-text-muted">Cargo</p>
-            <p className="mt-1 font-semibold text-ec-text">{shipment.cargo_type}</p>
+            <p className="text-xs font-semibold uppercase text-ec-text-muted">
+              Cargo
+            </p>
+            <p className="mt-1 font-semibold text-ec-text">
+              {shipment.cargo_type}
+            </p>
           </div>
           <div className="rounded-lg border border-ec-border bg-ec-surface-raised p-3">
-            <p className="text-xs font-semibold uppercase text-ec-text-muted">Weight</p>
-            <p className="mt-1 font-semibold text-ec-text">{shipment.weight_kg} kg</p>
+            <p className="text-xs font-semibold uppercase text-ec-text-muted">
+              Weight
+            </p>
+            <p className="mt-1 font-semibold text-ec-text">
+              {shipment.weight_kg} kg
+            </p>
           </div>
           <div className="rounded-lg border border-ec-border bg-ec-surface-raised p-3">
-            <p className="text-xs font-semibold uppercase text-ec-text-muted">Volume</p>
+            <p className="text-xs font-semibold uppercase text-ec-text-muted">
+              Volume
+            </p>
             <p className="mt-1 font-semibold text-ec-text">
               {shipment.volume_cbm ? `${shipment.volume_cbm} cbm` : "Not set"}
             </p>
           </div>
           <div className="rounded-lg border border-ec-border bg-ec-surface-raised p-3">
-            <p className="text-xs font-semibold uppercase text-ec-text-muted">Created</p>
+            <p className="text-xs font-semibold uppercase text-ec-text-muted">
+              Created
+            </p>
             <p className="mt-1 font-semibold text-ec-text">
               {formatDate(shipment.created_at)}
             </p>
@@ -638,19 +837,46 @@ function ShipmentDetailPanel({
         </div>
       </section>
 
-      <DocumentUploadForm
-        shipmentID={shipment.id}
-        busy={uploading}
-        onUpload={onUpload}
-      />
+      {(shipment.status === "INITIATED" ||
+        shipment.status === "DOCS_UPLOADED" ||
+        shipment.status === "REJECTED" ||
+        shipment.status === "PENDING_VERIFICATION") && (
+        <DocumentUploadForm
+          shipmentID={shipment.id}
+          busy={uploading}
+          onUpload={onUpload}
+        />
+      )}
 
       <section className="ec-card rounded-lg">
         <div className="mb-4 flex items-center gap-2">
           <FileText size={18} className="text-ec-accent" aria-hidden />
           <h3 className="font-bold text-ec-text">Documents</h3>
         </div>
-        <DocumentsList shipmentID={shipment.id} documents={documents} token={token} />
+        <DocumentsList
+          shipmentID={shipment.id}
+          documents={documents}
+          token={token}
+          downloadUrl={shipmentDocumentDownloadUrl}
+        />
       </section>
+
+      {showSellerDocuments && (
+        <section className="ec-card rounded-lg">
+          <div className="mb-4 flex items-center gap-2">
+            <FileText size={18} className="text-ec-accent" aria-hidden />
+            <h3 className="font-bold text-ec-text">
+              Seller uploaded documents
+            </h3>
+          </div>
+          <DocumentsList
+            shipmentID={shipment.id}
+            documents={seller_documents}
+            token={token}
+            downloadUrl={sellerShipmentDocumentDownloadUrl}
+          />
+        </section>
+      )}
 
       <section className="ec-card rounded-lg">
         <div className="mb-4 flex items-center gap-2">
@@ -677,7 +903,7 @@ export function ImporterWorkspace() {
 
   const selectedShipment = useMemo(
     () => shipments.find((s) => s.id === selectedID) ?? null,
-    [shipments, selectedID]
+    [shipments, selectedID],
   );
 
   async function loadShipments(authToken = token) {
@@ -687,16 +913,19 @@ export function ImporterWorkspace() {
     setSelectedID((prev) => prev ?? items[0]?.id ?? null);
   }
 
-  const loadDetail = useCallback(async (shipmentID: string, authToken = token) => {
-    if (!authToken) return;
-    setDetailLoading(true);
-    try {
-      const next = await getImporterShipment(authToken, shipmentID);
-      setDetail(next);
-    } finally {
-      setDetailLoading(false);
-    }
-  }, [token]);
+  const loadDetail = useCallback(
+    async (shipmentID: string, authToken = token) => {
+      if (!authToken) return;
+      setDetailLoading(true);
+      try {
+        const next = await getImporterShipment(authToken, shipmentID);
+        setDetail(next);
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [token],
+  );
 
   useEffect(() => {
     const t = getStoredToken();
@@ -720,7 +949,9 @@ export function ImporterWorkspace() {
       setDetail(null);
       return;
     }
-    loadDetail(selectedID, token).catch((err) => toast(errorMessage(err), "error"));
+    loadDetail(selectedID, token).catch((err) =>
+      toast(errorMessage(err), "error"),
+    );
   }, [loadDetail, selectedID, token, toast]);
 
   useEffect(() => {
@@ -816,7 +1047,9 @@ export function ImporterWorkspace() {
                   className="mx-auto text-ec-text-muted"
                   aria-hidden
                 />
-                <h3 className="mt-3 font-bold text-ec-text">No shipments yet</h3>
+                <h3 className="mt-3 font-bold text-ec-text">
+                  No shipments yet
+                </h3>
                 <p className="mt-1 text-sm text-ec-text-secondary">
                   Create your first shipment to begin the document workflow.
                 </p>

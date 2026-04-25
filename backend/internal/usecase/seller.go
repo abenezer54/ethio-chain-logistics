@@ -11,10 +11,14 @@ import (
 type SellerRepository interface {
 	ListPendingShipments(ctx context.Context, sellerID string, limit int) ([]domain.Shipment, error)
 	GetShipmentDocuments(ctx context.Context, shipmentID string) ([]domain.ShipmentDocument, error)
+	GetSellerDocument(ctx context.Context, docID string) (domain.SellerDocument, error)
+	GetShipmentDocument(ctx context.Context, docID string) (domain.ShipmentDocument, error)
 	AddSellerDocument(ctx context.Context, shipmentID, sellerID string, doc domain.SellerDocument) (domain.SellerDocument, error)
 	CreateVerification(ctx context.Context, v domain.SellerVerification) (domain.SellerVerification, error)
 	SetShipmentStatus(ctx context.Context, shipmentID, status string) error
 	ListApprovedShipments(ctx context.Context, sellerID string, limit int) ([]domain.Shipment, error)
+	ListAllShipments(ctx context.Context, sellerID string, limit int) ([]domain.Shipment, error)
+	CreateShipmentEvent(ctx context.Context, shipmentID, actorID, action, message string, fromStatus, toStatus domain.ShipmentStatus, metadata map[string]any) error
 	CreateNotification(ctx context.Context, n domain.Notification) (domain.Notification, error)
 	ListNotifications(ctx context.Context, userID string, limit int) ([]domain.Notification, error)
 }
@@ -52,8 +56,27 @@ func (u *SellerUsecase) GetShipmentDocuments(ctx context.Context, shipmentID str
 	return u.repo.GetShipmentDocuments(ctx, shipmentID)
 }
 
+func (u *SellerUsecase) GetSellerDocument(ctx context.Context, docID string) (domain.SellerDocument, error) {
+	return u.repo.GetSellerDocument(ctx, docID)
+}
+
+func (u *SellerUsecase) GetShipmentDocument(ctx context.Context, docID string) (domain.ShipmentDocument, error) {
+	return u.repo.GetShipmentDocument(ctx, docID)
+}
+
 func (u *SellerUsecase) UploadSellerDocument(ctx context.Context, shipmentID, sellerID string, doc domain.SellerDocument) (domain.SellerDocument, error) {
-	return u.repo.AddSellerDocument(ctx, shipmentID, sellerID, doc)
+	d, err := u.repo.AddSellerDocument(ctx, shipmentID, sellerID, doc)
+	if err != nil {
+		return domain.SellerDocument{}, err
+	}
+
+	if doc.DocType == "CERTIFICATE_OF_ORIGIN" {
+		if err := u.repo.SetShipmentStatus(ctx, shipmentID, string(domain.ShipmentStatusExportDocsUploaded)); err != nil {
+			fmt.Printf("warning: failed to update shipment status: %v\n", err)
+		}
+	}
+
+	return d, nil
 }
 
 func (u *SellerUsecase) VerifyShipment(ctx context.Context, sellerID, shipmentID, action string, checks map[string]bool, reason string) (domain.SellerVerification, error) {
@@ -79,17 +102,34 @@ func (u *SellerUsecase) VerifyShipment(ctx context.Context, sellerID, shipmentID
 		return domain.SellerVerification{}, err
 	}
 
-	// Update shipment status
-	status := "SELLER_VERIFIED"
-	if action == "REJECT" || action == "REQUEST_CHANGES" {
-		if action == "REJECT" {
-			status = "SELLER_REJECTED"
-		} else {
-			status = "SELLER_REQUESTED_CHANGES"
-		}
+	// Update shipment status using existing enums in shipments table
+	// APPROVE -> VERIFIED, REJECT -> REJECTED, REQUEST_CHANGES -> PENDING_VERIFICATION
+	status := string(domain.ShipmentStatusVerified)
+	eventAction := "SHIPMENT_APPROVED"
+	message := "Seller approved the shipment."
+
+	if action == "REJECT" {
+		status = string(domain.ShipmentStatusRejected)
+		eventAction = "SHIPMENT_REJECTED"
+		message = "Seller rejected the shipment."
+	} else if action == "REQUEST_CHANGES" {
+		status = "PENDING_VERIFICATION"
+		eventAction = "SHIPMENT_CHANGES_REQUESTED"
+		message = "Seller requested changes to the shipment documents."
 	}
+
 	if err := u.repo.SetShipmentStatus(ctx, shipmentID, status); err != nil {
 		return domain.SellerVerification{}, err
+	}
+
+	// Create shipment event with rejection reason in metadata
+	eventMetadata := map[string]any{}
+	if action == "REJECT" && reason != "" {
+		eventMetadata["reason"] = reason
+	}
+
+	if err := u.repo.CreateShipmentEvent(ctx, shipmentID, sellerID, eventAction, message, domain.ShipmentStatusPendingVerification, domain.ShipmentStatus(status), eventMetadata); err != nil {
+		fmt.Printf("warning: failed to create shipment event: %v\n", err)
 	}
 
 	// Notify importer and ESL agent (simple payloads)
@@ -101,6 +141,10 @@ func (u *SellerUsecase) VerifyShipment(ctx context.Context, sellerID, shipmentID
 
 func (u *SellerUsecase) ListApprovedShipments(ctx context.Context, sellerID string, limit int) ([]domain.Shipment, error) {
 	return u.repo.ListApprovedShipments(ctx, sellerID, limit)
+}
+
+func (u *SellerUsecase) ListAllShipments(ctx context.Context, sellerID string, limit int) ([]domain.Shipment, error) {
+	return u.repo.ListAllShipments(ctx, sellerID, limit)
 }
 
 func (u *SellerUsecase) ListNotifications(ctx context.Context, userID string, limit int) ([]domain.Notification, error) {

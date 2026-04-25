@@ -10,6 +10,8 @@ const (
 	ShipmentStatusPendingVerification ShipmentStatus = "PENDING_VERIFICATION"
 	ShipmentStatusVerified            ShipmentStatus = "VERIFIED"
 	ShipmentStatusApproved            ShipmentStatus = "APPROVED"
+	ShipmentStatusExportDocsUploaded  ShipmentStatus = "EXPORT_DOCS_UPLOADED"
+	ShipmentStatusRejected            ShipmentStatus = "REJECTED"
 	ShipmentStatusAllocated           ShipmentStatus = "ALLOCATED"
 	ShipmentStatusInTransit           ShipmentStatus = "IN_TRANSIT"
 	ShipmentStatusArrived             ShipmentStatus = "ARRIVED"
@@ -95,7 +97,8 @@ type ShipmentEvent struct {
 }
 
 type ShipmentDetail struct {
-	Shipment  Shipment           `json:"shipment"`
-	Documents []ShipmentDocument `json:"documents"`
-	Events    []ShipmentEvent    `json:"events"`
+	Shipment        Shipment           `json:"shipment"`
+	Documents       []ShipmentDocument `json:"documents"`
+	SellerDocuments []SellerDocument   `json:"seller_documents,omitempty"`
+	Events          []ShipmentEvent    `json:"events"`
 }

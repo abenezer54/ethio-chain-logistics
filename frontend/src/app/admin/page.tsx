@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Ban,
 } from "lucide-react";
+import Image from "next/image";
 import { API_BASE, apiFetch } from "@/lib/api";
 import { type LoginResponse } from "@/lib/auth-redirect";
 import {
@@ -197,17 +198,7 @@ function Sidebar({
   );
 }
 
-function DocRowSkeleton() {
-  return (
-    <div className="flex animate-pulse items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
-      <div className="h-14 w-14 shrink-0 rounded-lg bg-white/10" />
-      <div className="min-w-0 flex-1 space-y-2">
-        <div className="h-3.5 w-2/5 rounded bg-white/15" />
-        <div className="h-3 w-3/5 rounded bg-white/10" />
-      </div>
-    </div>
-  );
-}
+/* DocRowSkeleton removed — previously unused. */
 
 /** Centered modal workspace: preview stage + filmstrip + side panel (not a side drawer). */
 function ReviewDrawer({
@@ -374,9 +365,11 @@ function ReviewDrawer({
                   <p className="text-sm">Loading files…</p>
                 </div>
               ) : previewUrl && selectedDoc ? (
-                <img
+                <Image
                   src={previewUrl}
                   alt={selectedDoc.original_file_name}
+                  width={1200}
+                  height={800}
                   className="max-h-[min(50vh,420px)] w-full max-w-full rounded-lg object-contain shadow-2xl ring-1 ring-white/10"
                 />
               ) : selectedDoc && !isImage(selectedDoc.content_type) ? (
@@ -438,9 +431,11 @@ function ReviewDrawer({
                       >
                         <div className="flex h-16 w-20 items-center justify-center bg-white/5 sm:h-[72px] sm:w-[96px]">
                           {thumb ? (
-                            <img
+                            <Image
                               src={thumb}
                               alt=""
+                              width={96}
+                              height={72}
                               className="h-full w-full object-cover"
                             />
                           ) : (
