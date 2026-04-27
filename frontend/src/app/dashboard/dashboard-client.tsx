@@ -8,6 +8,9 @@ import { Spinner } from "@/components/ui/Spinner";
 import { PortalHeader } from "@/components/layout/PortalHeader";
 import { clearStoredToken, getStoredToken } from "@/lib/auth-storage";
 import SellerWorkspace from "@/components/dashboard/SellerWorkspace";
+import ESLWorkspace from "@/components/dashboard/ESLWorkspace";
+import TransporterWorkspace from "@/components/dashboard/TransporterWorkspace";
+import CustomsWorkspace from "@/components/dashboard/CustomsWorkspace";
 import { decodeJwtPayload, isTokenExpired } from "@/lib/jwt";
 import { ImporterWorkspace } from "./importer-workspace";
 
@@ -45,6 +48,24 @@ function workspacePanel(role: string): {
         title: "Your selling workspace",
         body: "This is where your export workflows will live. You can manage your account today. Listing loads and sharing handoffs with buyers is coming soon.",
         hint: "Next step when features go live: attach documents to a sale and keep buyers in the same thread.",
+      };
+    case "ESL_AGENT":
+      return {
+        title: "ESL allocation workspace",
+        body: "Review verified shipments, select available transport capacity, and confirm allocations for departure.",
+        hint: "Choose a shipment, assign ship and truck capacity, then set the expected departure date.",
+      };
+    case "TRANSPORTER":
+      return {
+        title: "Transporter workspace",
+        body: "View allocated sea and inland legs, update route milestones, and attach optional GPS details to the shipment audit trail.",
+        hint: "Assigned shipments appear after an ESL agent allocates your registered ship or truck.",
+      };
+    case "CUSTOMS":
+      return {
+        title: "Customs clearance workspace",
+        body: "Review arrived shipments, inspect the audit trail and document hashes, then grant final digital release.",
+        hint: "Cleared shipments receive a downloadable clearance certificate.",
       };
     default:
       return {
@@ -226,6 +247,12 @@ export default function DashboardClient() {
         <div className="mx-auto w-full  flex-1 px-4 py-10 md:px-8">
           <SellerWorkspace />
         </div>
+      ) : role === "ESL_AGENT" ? (
+        <ESLWorkspace />
+      ) : role === "TRANSPORTER" ? (
+        <TransporterWorkspace />
+      ) : role === "CUSTOMS" ? (
+        <CustomsWorkspace />
       ) : (
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 md:px-8">
           <div className="ec-card border-ec-border shadow-md">
