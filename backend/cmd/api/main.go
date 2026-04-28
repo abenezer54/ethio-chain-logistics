@@ -47,10 +47,19 @@ func main() {
 	sellerRepo := repository.NewSellerRepo(pool)
 	sellerUC := usecase.NewSellerUsecase(sellerRepo)
 	sellerHandlers := controller.NewSellerHandlers(sellerUC, cfg.UploadDir)
+	eslRepo := repository.NewESLRepo(pool)
+	eslUC := usecase.NewESLUsecase(eslRepo)
+	eslHandlers := controller.NewESLHandlers(eslUC)
+	transporterRepo := repository.NewTransporterRepo(pool)
+	transporterUC := usecase.NewTransporterUsecase(transporterRepo)
+	transporterHandlers := controller.NewTransporterHandlers(transporterUC)
+	customsRepo := repository.NewCustomsRepo(pool)
+	customsUC := usecase.NewCustomsUsecase(customsRepo)
+	customsHandlers := controller.NewCustomsHandlers(customsUC, cfg.UploadDir)
 
 	bootstrapAdmin(ctx, userRepo)
 
-	engine := controller.Router(healthUC, authHandlers, adminHandlers, importerHandlers, sellerHandlers, cfg.JWTSecret)
+	engine := controller.Router(healthUC, authHandlers, adminHandlers, importerHandlers, sellerHandlers, eslHandlers, transporterHandlers, customsHandlers, cfg.JWTSecret)
 
 	// Public lookup for sellers (used by importer UI autocomplete)
 	engine.GET("/api/v1/sellers", func(c *gin.Context) {

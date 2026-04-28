@@ -71,8 +71,8 @@ function requiredDocs(role: Role) {
       ];
     case "TRANSPORTER":
       return [
-        { key: "drivers_license", label: "Driver license" },
-        { key: "vehicle_plate_registry", label: "Vehicle plate registry" },
+        { key: "drivers_license", label: "Operator license" },
+        { key: "vehicle_plate_registry", label: "Transport asset registry" },
       ];
     case "CUSTOMS":
       return [{ key: "gov_id_badge", label: "Government ID or badge" }];
@@ -104,7 +104,7 @@ function roleSignupBlurb(role: Role): string {
     case "SELLER":
       return "Add your selling business details and upload export documents so Ethio-Chain can verify you as a seller.";
     case "TRANSPORTER":
-      return "Add carrier details and upload license and vehicle papers so Ethio-Chain can verify you as a transporter.";
+      return "Add carrier details and upload license and asset papers so Ethio-Chain can verify you as a transporter.";
     case "CUSTOMS":
       return "Add office details and upload ID so Ethio-Chain can verify you as a customs user.";
     case "ESL_AGENT":
@@ -176,7 +176,7 @@ export default function SignupClient() {
         ] as Array<{ key: keyof SignupState; label: string }>;
       case "TRANSPORTER":
         return [
-          { key: "truck_id", label: "Truck ID" },
+          { key: "truck_id", label: "Transport asset ID" },
           { key: "carrier_company", label: "Carrier company" },
         ] as Array<{ key: keyof SignupState; label: string }>;
       case "CUSTOMS":

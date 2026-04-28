@@ -14,9 +14,19 @@ type Doc = {
   doc_type?: string;
 };
 
+type ShipmentSummary = {
+  id: string;
+  origin_port?: string;
+  destination_port?: string;
+  cargo_type?: string;
+  weight_kg?: string;
+  volume_cbm?: string;
+};
+
 export default function ShipmentDetailClient({ id }: { id: string }) {
   const router = useRouter();
   const [docs, setDocs] = useState<Doc[]>([]);
+  const [shipment, setShipment] = useState<ShipmentSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [checks, setChecks] = useState<Record<string, boolean>>({});
@@ -26,12 +36,20 @@ export default function ShipmentDetailClient({ id }: { id: string }) {
     setLoading(true);
     try {
       const token = getStoredToken();
-      const j = await apiFetch<{ items: Doc[] }>(
-        `/api/v1/seller/shipments/${id}/documents`,
-        { token: token ?? undefined },
-      );
-      const items = Array.isArray(j.items) ? j.items : [];
+      const [docsJson, shipmentsJson] = await Promise.all([
+        apiFetch<{ items: Doc[] }>(`/api/v1/seller/shipments/${id}/documents`, {
+          token: token ?? undefined,
+        }),
+        apiFetch<{ items: ShipmentSummary[] }>("/api/v1/seller/all?limit=500", {
+          token: token ?? undefined,
+        }),
+      ]);
+      const items = Array.isArray(docsJson.items) ? docsJson.items : [];
       setDocs(items);
+      const shipmentList = Array.isArray(shipmentsJson.items)
+        ? shipmentsJson.items
+        : [];
+      setShipment(shipmentList.find((s) => s.id === id) ?? null);
       setChecks({
         bol: items.some(
           (d) => (d.doc_type || "").toUpperCase() === "BILL_OF_LADING",
@@ -39,9 +57,7 @@ export default function ShipmentDetailClient({ id }: { id: string }) {
         inv: items.some(
           (d) => (d.doc_type || "").toUpperCase() === "COMMERCIAL_INVOICE",
         ),
-        lc: items.some(
-          (d) => (d.doc_type || "").toUpperCase() === "LETTER_OF_CREDIT",
-        ),
+        weight: false,
       });
     } catch (err) {
       console.error("load shipment docs", err);
@@ -126,6 +142,31 @@ export default function ShipmentDetailClient({ id }: { id: string }) {
           </div>
 
           <div className="space-y-6">
+            <div className="ec-card p-6 bg-ec-surface-raised">
+              <h4 className="text-sm font-bold text-ec-text border-b pb-2 mb-3">
+                Declared cargo
+              </h4>
+              <div className="space-y-2 text-sm text-ec-text-secondary">
+                <p>
+                  <span className="font-semibold text-ec-text">Route:</span>{" "}
+                  {shipment?.origin_port || "Origin"} to{" "}
+                  {shipment?.destination_port || "destination"}
+                </p>
+                <p>
+                  <span className="font-semibold text-ec-text">Cargo:</span>{" "}
+                  {shipment?.cargo_type || "Not recorded"}
+                </p>
+                <p>
+                  <span className="font-semibold text-ec-text">Weight:</span>{" "}
+                  {shipment?.weight_kg ? `${shipment.weight_kg} kg` : "Not recorded"}
+                </p>
+                <p>
+                  <span className="font-semibold text-ec-text">Volume:</span>{" "}
+                  {shipment?.volume_cbm ? `${shipment.volume_cbm} cbm` : "Not recorded"}
+                </p>
+              </div>
+            </div>
+
             <div className="ec-card p-6">
               <h3 className="mb-4 text-lg font-bold text-ec-text">
                 Document Checklist
@@ -156,12 +197,14 @@ export default function ShipmentDetailClient({ id }: { id: string }) {
                 <label className="flex items-center gap-3 cursor-pointer group">
                   <input
                     type="checkbox"
-                    checked={!!checks.lc}
-                    onChange={() => setChecks((s) => ({ ...s, lc: !s.lc }))}
+                    checked={!!checks.weight}
+                    onChange={() =>
+                      setChecks((s) => ({ ...s, weight: !s.weight }))
+                    }
                     className="h-5 w-5 rounded border-ec-border text-ec-accent focus:ring-ec-accent"
                   />
                   <span className="text-sm text-ec-text group-hover:text-ec-text-strong transition-colors">
-                    Letter of Credit Verified
+                    Declared cargo weight matches documents
                   </span>
                 </label>
               </div>

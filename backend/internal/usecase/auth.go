@@ -31,9 +31,9 @@ type EmailSender interface {
 }
 
 type AuthUsecase struct {
-	users    UserRepository
-	docs     KYCDocumentRepository
-	email    EmailSender
+	users     UserRepository
+	docs      KYCDocumentRepository
+	email     EmailSender
 	jwtSecret []byte
 }
 
@@ -217,7 +217,7 @@ func (r SignupRequest) Validate() error {
 		}
 	case domain.RoleTransporter:
 		if r.TruckID == "" || r.CarrierCompany == "" {
-			return fmt.Errorf("truck_id and carrier_company are required for transporter")
+			return fmt.Errorf("transport asset id and carrier_company are required for transporter")
 		}
 	case domain.RoleCustoms:
 		if r.EmployeeID == "" || r.BranchOffice == "" {
@@ -232,4 +232,3 @@ func (r SignupRequest) Validate() error {
 	}
 	return nil
 }
-

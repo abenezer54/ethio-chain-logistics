@@ -81,6 +81,88 @@ const DOC_LABEL: Record<ShipmentDocument["doc_type"], string> = {
   SUPPLEMENTAL: "Supplemental",
 };
 
+const CARGO_TYPES = [
+  "Electronics",
+  "Textiles and garments",
+  "Machinery",
+  "Automotive parts",
+  "Food products",
+  "Pharmaceuticals",
+  "Construction materials",
+  "Agricultural inputs",
+  "Chemicals",
+  "Medical equipment",
+  "Industrial raw materials",
+  "Consumer goods",
+  "General cargo",
+];
+
+const ORIGIN_PORTS = [
+  "Djibouti Port, Djibouti",
+  "Berbera Port, Somaliland",
+  "Port Sudan, Sudan",
+  "Mombasa Port, Kenya",
+  "Dar es Salaam Port, Tanzania",
+  "Jebel Ali Port, United Arab Emirates",
+  "Shanghai Port, China",
+  "Ningbo-Zhoushan Port, China",
+  "Shenzhen Port, China",
+  "Guangzhou Port, China",
+  "Qingdao Port, China",
+  "Tianjin Port, China",
+  "Singapore Port, Singapore",
+  "Busan Port, South Korea",
+  "Port Klang, Malaysia",
+  "Tanjung Pelepas Port, Malaysia",
+  "Laem Chabang Port, Thailand",
+  "Ho Chi Minh City Port, Vietnam",
+  "Chennai Port, India",
+  "Nhava Sheva/JNPT, India",
+  "Mundra Port, India",
+  "Karachi Port, Pakistan",
+  "Colombo Port, Sri Lanka",
+  "King Abdulaziz Port Dammam, Saudi Arabia",
+  "Jeddah Islamic Port, Saudi Arabia",
+  "Sohar Port, Oman",
+  "Salalah Port, Oman",
+  "Hamad Port, Qatar",
+  "Antwerp-Bruges Port, Belgium",
+  "Rotterdam Port, Netherlands",
+  "Hamburg Port, Germany",
+  "Piraeus Port, Greece",
+  "Valencia Port, Spain",
+  "Genoa Port, Italy",
+  "Felixstowe Port, United Kingdom",
+  "New York/New Jersey Port, United States",
+  "Los Angeles Port, United States",
+  "Long Beach Port, United States",
+  "Houston Port, United States",
+  "Santos Port, Brazil",
+  "Durban Port, South Africa",
+  "Cape Town Port, South Africa",
+  "Lagos/Apapa Port, Nigeria",
+  "Tema Port, Ghana",
+  "Alexandria Port, Egypt",
+  "Suez Port, Egypt",
+];
+
+const DESTINATION_PORTS = [
+  "Modjo Dry Port, Ethiopia",
+  "Addis Ababa Hub, Ethiopia",
+  "Dire Dawa Terminal, Ethiopia",
+  "Kombolcha Dry Port, Ethiopia",
+  "Mekelle Dry Port, Ethiopia",
+  "Semera Dry Port, Ethiopia",
+  "Gelan Logistics Terminal, Ethiopia",
+  "Kality Customs Branch, Ethiopia",
+  "Hawassa Industrial Park, Ethiopia",
+  "Bole Lemi Industrial Park, Ethiopia",
+  "Adama Industrial Park, Ethiopia",
+  "Jimma Inland Terminal, Ethiopia",
+  "Bahir Dar Logistics Hub, Ethiopia",
+  "Dukem Eastern Industrial Zone, Ethiopia",
+];
+
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   if (typeof e === "string") return e;
@@ -219,6 +301,74 @@ function ShipmentCard({
   );
 }
 
+function SearchableSelect({
+  label,
+  value,
+  options,
+  placeholder,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  placeholder: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const filtered = useMemo(() => {
+    const q = value.trim().toLowerCase();
+    if (!q) return options.slice(0, 12);
+    return options
+      .filter((option) => option.toLowerCase().includes(q))
+      .slice(0, 12);
+  }, [options, value]);
+  const isKnown = !value || options.includes(value);
+
+  return (
+    <label className="relative block">
+      <span className="ec-label">{label}</span>
+      <input
+        className={`ec-input mt-1 ${!isKnown ? "ec-input-error" : ""}`}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        placeholder={placeholder}
+        disabled={disabled}
+        required
+        autoComplete="off"
+      />
+      {open && filtered.length > 0 ? (
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-lg border border-ec-border bg-ec-card py-1 shadow-lg">
+          {filtered.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onChange(option);
+                setOpen(false);
+              }}
+              className={`block w-full px-3 py-2 text-left text-sm transition-colors hover:bg-ec-surface-raised ${
+                option === value
+                  ? "font-semibold text-ec-accent"
+                  : "text-ec-text-secondary"
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </label>
+  );
+}
+
 function CreateShipmentForm({
   busy,
   onCreate,
@@ -282,6 +432,13 @@ function CreateShipmentForm({
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (
+      !ORIGIN_PORTS.includes(form.origin_port.trim()) ||
+      !DESTINATION_PORTS.includes(form.destination_port.trim()) ||
+      !CARGO_TYPES.includes(form.cargo_type.trim())
+    ) {
+      return;
+    }
     await onCreate({
       origin_port: form.origin_port.trim(),
       destination_port: form.destination_port.trim(),
@@ -300,6 +457,13 @@ function CreateShipmentForm({
     });
   }
 
+  const formReady =
+    ORIGIN_PORTS.includes(form.origin_port.trim()) &&
+    DESTINATION_PORTS.includes(form.destination_port.trim()) &&
+    CARGO_TYPES.includes(form.cargo_type.trim()) &&
+    !!form.weight_kg.trim() &&
+    !!form.seller_id?.trim();
+
   return (
     <form onSubmit={onSubmit} className="ec-card rounded-lg" noValidate>
       <div className="flex items-start gap-3">
@@ -315,38 +479,38 @@ function CreateShipmentForm({
       </div>
 
       <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <label className="block">
-          <span className="ec-label">Origin port</span>
-          <input
-            className="ec-input mt-1"
-            value={form.origin_port}
-            onChange={(e) => setField("origin_port", e.target.value)}
-            placeholder="Djibouti Port"
-            disabled={busy}
-            required
-          />
-        </label>
-        <label className="block">
-          <span className="ec-label">Destination port</span>
-          <input
-            className="ec-input mt-1"
-            value={form.destination_port}
-            onChange={(e) => setField("destination_port", e.target.value)}
-            placeholder="Modjo Dry Port"
-            disabled={busy}
-            required
-          />
-        </label>
+        <SearchableSelect
+          label="Origin port"
+          value={form.origin_port}
+          options={ORIGIN_PORTS}
+          placeholder="Search origin port"
+          disabled={busy}
+          onChange={(value) => setField("origin_port", value)}
+        />
+        <SearchableSelect
+          label="Destination"
+          value={form.destination_port}
+          options={DESTINATION_PORTS}
+          placeholder="Search dry port or hub"
+          disabled={busy}
+          onChange={(value) => setField("destination_port", value)}
+        />
         <label className="block">
           <span className="ec-label">Cargo type</span>
-          <input
+          <select
             className="ec-input mt-1"
             value={form.cargo_type}
             onChange={(e) => setField("cargo_type", e.target.value)}
-            placeholder="Electronics"
             disabled={busy}
             required
-          />
+          >
+            <option value="">Select cargo type</option>
+            {CARGO_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="block">
           <span className="ec-label">Weight in kg</span>
@@ -428,7 +592,7 @@ function CreateShipmentForm({
 
       <button
         type="submit"
-        disabled={busy || !(form.seller_id && form.seller_id.trim())}
+        disabled={busy || !formReady}
         className="ec-btn-primary mt-5 w-full"
       >
         {busy ? (
