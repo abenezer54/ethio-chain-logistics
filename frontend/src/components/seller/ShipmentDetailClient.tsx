@@ -12,6 +12,9 @@ type Doc = {
   original_file_name: string;
   content_type?: string;
   doc_type?: string;
+  size_bytes?: number;
+  sha256_hash?: string;
+  uploaded_at?: string;
 };
 
 type ShipmentSummary = {
@@ -264,9 +267,12 @@ export default function ShipmentDetailClient({ id }: { id: string }) {
                 )}
               </div>
               {!allChecked && (
-                <p className="mt-4 text-xs text-center text-ec-text-muted italic">
-                  * Verify all documents to enable approval
-                </p>
+                <div className="mt-4 flex items-center justify-center gap-2 rounded-lg bg-orange-50 p-3 text-orange-800 border border-orange-100">
+                  <div className="h-2 w-2 rounded-full bg-orange-500 animate-ping" />
+                  <p className="text-xs font-semibold">
+                    You must verify all documents to approve
+                  </p>
+                </div>
               )}
             </div>
 

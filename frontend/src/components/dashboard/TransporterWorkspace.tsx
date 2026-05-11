@@ -249,43 +249,51 @@ function ShipmentListItem({
 }) {
   const shipment = item.shipment;
   const slot = item.transport_slot;
-
   return (
     <button
       type="button"
       onClick={onSelect}
-      className={`w-full rounded-lg border bg-ec-card p-4 text-left shadow-sm transition-colors hover:border-ec-border-strong hover:bg-ec-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent ${
-        selected ? "border-ec-accent ring-1 ring-ec-accent/30" : "border-ec-border"
+      className={`group w-full rounded-2xl border p-5 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg active:scale-[0.98] ${
+        selected ? "border-ec-accent bg-blue-50/30 ring-2 ring-ec-accent/20" : "border-ec-border bg-white"
       }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase text-ec-text-muted">
-            Shipment {shortID(shipment.id)}
-          </p>
-          <h3 className="mt-1 flex flex-wrap items-center gap-2 text-base font-bold text-ec-text">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              #{shortID(shipment.id)}
+            </span>
+            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusTone(shipment.status)}`}>
+              {STATUS_LABEL[shipment.status] ?? shipment.status}
+            </span>
+          </div>
+          <h3 className="flex items-center gap-2 text-lg font-black text-ec-text">
             <span className="truncate">{shipment.origin_port}</span>
-            <ArrowRight size={16} aria-hidden />
+            <ArrowRight size={16} className="text-slate-400" aria-hidden />
             <span className="truncate">{shipment.destination_port}</span>
           </h3>
         </div>
-        <span
-          className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(
-            shipment.status,
-          )}`}
-        >
-          {STATUS_LABEL[shipment.status] ?? shipment.status}
-        </span>
       </div>
-      <div className="mt-4 grid gap-2 text-sm text-ec-text-secondary sm:grid-cols-2">
-        <span className="inline-flex items-center gap-2">
-          <PackageCheck size={16} aria-hidden />
-          {formatWeight(shipment.weight_kg)}
-        </span>
-        <span className="inline-flex items-center gap-2">
-          <TransportModeIcon type={slot.transport_type} />
-          {legLabel(item.allocation.leg_type)}: {slot.reference_code}
-        </span>
+      
+      <div className="mt-4 flex flex-col gap-2 rounded-xl bg-slate-50 p-3 border border-slate-100">
+        <div className="flex items-center justify-between text-sm">
+          <span className="inline-flex items-center gap-2 font-semibold text-slate-700">
+            <TransportModeIcon type={slot.transport_type} size={18} />
+            {legLabel(item.allocation.leg_type)}
+          </span>
+          <span className="font-mono text-xs font-bold text-slate-500 bg-white px-2 py-1 rounded shadow-sm border border-slate-200">
+            {slot.reference_code}
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="inline-flex items-center gap-2 text-slate-600">
+            <PackageCheck size={16} className="text-emerald-600" aria-hidden />
+            {shipment.cargo_type}
+          </span>
+          <span className="font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded text-xs">
+            {formatWeight(shipment.weight_kg)}
+          </span>
+        </div>
       </div>
     </button>
   );
@@ -442,7 +450,7 @@ function MilestonePanel({
         </label>
       </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
+      <div className="mt-6 flex flex-col gap-4">
         {visibleMilestones.map((milestone) => {
           const Icon = milestone.icon;
           const done = completed.has(milestone.id);
@@ -455,40 +463,59 @@ function MilestonePanel({
               type="button"
               onClick={() => onSubmit(milestone.id)}
               disabled={disabled}
-              className={`rounded-lg border p-4 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent ${
+              className={`relative overflow-hidden rounded-2xl border p-5 text-left shadow-sm transition-all duration-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ec-accent/30 ${
                 done
-                  ? "border-emerald-200 bg-emerald-50"
+                  ? "border-emerald-300 bg-emerald-50 opacity-90"
                   : recommended
-                    ? "border-ec-accent bg-ec-accent/5 hover:border-ec-accent"
-                    : "border-ec-border bg-ec-card hover:border-ec-border-strong hover:bg-ec-surface-raised"
-              } disabled:cursor-not-allowed disabled:opacity-70`}
+                    ? "border-transparent bg-ec-accent text-white shadow-lg hover:shadow-ec-accent/40 hover:-translate-y-1 active:scale-[0.98]"
+                    : "border-ec-border bg-white hover:border-slate-300 active:scale-[0.98]"
+              } disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:shadow-sm disabled:active:scale-100`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <span
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                    done ? "bg-emerald-600 text-white" : "bg-ec-surface-raised text-ec-accent"
-                  }`}
-                >
-                  {submitting === milestone.id ? (
-                    <Spinner size="sm" label={`Updating ${milestone.label}`} />
-                  ) : (
-                    <Icon size={19} aria-hidden />
-                  )}
-                </span>
-                <span
-                  className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                    done
-                      ? "border-emerald-200 bg-white text-emerald-800"
-                      : recommended
-                        ? "border-ec-accent/30 bg-white text-ec-accent"
-                        : "border-ec-border bg-ec-surface-raised text-ec-text-muted"
-                  }`}
-                >
-                  {done ? "Done" : recommended ? "Next" : "Open"}
-                </span>
+              {recommended && (
+                <div className="absolute inset-0 z-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.2)_50%,transparent_75%)] bg-[length:250%_250%] animate-[shimmer_2s_infinite]" />
+              )}
+              
+              <div className="relative z-10 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl shadow-inner ${
+                      done 
+                        ? "bg-emerald-500 text-white" 
+                        : recommended 
+                          ? "bg-white/20 text-white backdrop-blur-sm" 
+                          : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    {submitting === milestone.id ? (
+                      <Spinner size="md" label={`Updating ${milestone.label}`} />
+                    ) : (
+                      <Icon size={28} aria-hidden />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className={`text-xl font-black tracking-tight ${recommended ? "text-white" : "text-ec-text"}`}>
+                      {milestone.label}
+                    </h3>
+                    <p className={`mt-0.5 text-sm font-semibold ${recommended ? "text-white/80" : "text-ec-text-muted"}`}>
+                      {milestone.place}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="shrink-0">
+                  <span
+                    className={`inline-flex items-center justify-center rounded-full px-4 py-1.5 text-xs font-black uppercase tracking-wider shadow-sm ${
+                      done
+                        ? "bg-white text-emerald-700"
+                        : recommended
+                          ? "bg-white text-ec-accent"
+                          : "bg-slate-100 text-slate-400"
+                    }`}
+                  >
+                    {done ? "Completed" : recommended ? "Confirm Arrival" : "Locked"}
+                  </span>
+                </div>
               </div>
-              <h3 className="mt-3 font-bold text-ec-text">{milestone.label}</h3>
-              <p className="mt-1 text-sm text-ec-text-muted">{milestone.place}</p>
             </button>
           );
         })}
@@ -734,7 +761,7 @@ export default function TransporterWorkspace() {
   const activeDetail = detail ?? selectedListItem ?? null;
 
   return (
-    <main className="mx-auto grid w-full max-w-7xl flex-1 gap-6 px-4 py-8 md:px-8 xl:grid-cols-[minmax(300px,0.9fr)_minmax(0,1.5fr)]">
+    <main className="mx-auto grid w-full max-w-6xl flex-1 gap-6 px-4 py-8 md:px-8 lg:grid-cols-[340px_1fr]">
       <section className="ec-card rounded-lg">
         <div className="flex items-start justify-between gap-3">
           <div>

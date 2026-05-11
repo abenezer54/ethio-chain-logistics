@@ -117,7 +117,7 @@ export default function SellerWorkspace() {
   }, [fetchAll]);
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="mx-auto w-full max-w-6xl">
       {/* Stats Summary Section */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         <div

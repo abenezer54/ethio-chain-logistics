@@ -23,7 +23,7 @@ func (r *SellerRepo) ListPendingShipments(ctx context.Context, sellerID string, 
 		limit = 100
 	}
 	const q = `
-SELECT id, importer_id, seller_id, origin_port, destination_port, cargo_type, weight_kg, volume_cbm, status, anchor_status, created_at, updated_at
+SELECT id, importer_id, COALESCE(seller_id::text, ''), origin_port, destination_port, cargo_type, weight_kg::text, COALESCE(volume_cbm::text, ''), status, anchor_status, created_at, updated_at
 FROM shipments
 -- Pending for seller: only shown after importer uploads documents
 WHERE seller_id = $1 AND status IN ('DOCS_UPLOADED', 'PENDING_VERIFICATION')
@@ -177,7 +177,7 @@ func (r *SellerRepo) ListApprovedShipments(ctx context.Context, sellerID string,
 		limit = 100
 	}
 	const q = `
-	SELECT id, importer_id, seller_id, origin_port, destination_port, cargo_type, weight_kg, volume_cbm, status, anchor_status, created_at, updated_at
+	SELECT id, importer_id, COALESCE(seller_id::text, ''), origin_port, destination_port, cargo_type, weight_kg::text, COALESCE(volume_cbm::text, ''), status, anchor_status, created_at, updated_at
 	FROM shipments
 	WHERE seller_id = $1 AND status IN ('VERIFIED', 'EXPORT_DOCS_UPLOADED')
 	ORDER BY updated_at DESC
@@ -208,7 +208,7 @@ func (r *SellerRepo) ListAllShipments(ctx context.Context, sellerID string, limi
 		limit = 100
 	}
 	const q = `
-	SELECT id, importer_id, seller_id, origin_port, destination_port, cargo_type, weight_kg, volume_cbm, status, anchor_status, created_at, updated_at
+	SELECT id, importer_id, COALESCE(seller_id::text, ''), origin_port, destination_port, cargo_type, weight_kg::text, COALESCE(volume_cbm::text, ''), status, anchor_status, created_at, updated_at
 	FROM shipments
 	WHERE seller_id = $1
 	ORDER BY updated_at DESC

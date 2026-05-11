@@ -268,9 +268,9 @@ function ShipmentCard({
     <button
       type="button"
       onClick={onSelect}
-      className={`w-full rounded-lg border bg-ec-card p-4 text-left shadow-sm transition-colors hover:border-ec-border-strong hover:bg-ec-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent ${
+      className={`group w-full rounded-xl border bg-white p-5 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent ${
         selected
-          ? "border-ec-accent ring-1 ring-ec-accent/30"
+          ? "border-ec-accent ring-1 ring-ec-accent/20 bg-blue-50/10 shadow-[0_4px_20px_-4px_rgba(37,99,235,0.1)]"
           : "border-ec-border"
       }`}
     >
@@ -695,23 +695,76 @@ function DocumentUploadForm({
 
 function ProgressSteps({ status }: { status: ShipmentStatus }) {
   const activeIndex = STATUS_STEPS.indexOf(status);
+  
+  // Define major milestone groups
+  const MILESTONES = [
+    { label: "Initiated", group: ["INITIATED", "DOCS_UPLOADED", "PENDING_VERIFICATION", "REJECTED"] },
+    { label: "Verified", group: ["VERIFIED", "APPROVED", "EXPORT_DOCS_UPLOADED"] },
+    { label: "Allocated", group: ["ALLOCATED"] },
+    { label: "In Transit", group: ["IN_TRANSIT", "ARRIVED"] },
+    { label: "Cleared", group: ["AT_CUSTOMS", "HELD_FOR_INSPECTION", "CLEARED"] }
+  ];
+
+  // Find which milestone group the current status belongs to
+  let currentMilestoneIndex = 0;
+  for (let i = 0; i < MILESTONES.length; i++) {
+    if (MILESTONES[i].group.includes(status)) {
+      currentMilestoneIndex = i;
+      break;
+    }
+  }
+
   return (
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-      {STATUS_STEPS.map((step, index) => {
-        const active = index <= activeIndex && activeIndex >= 0;
-        return (
-          <div
-            key={step}
-            className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
-              active
-                ? "border-ec-accent bg-ec-accent/10 text-ec-text"
-                : "border-ec-border bg-ec-card text-ec-text-muted"
-            }`}
-          >
-            {STATUS_LABEL[step]}
-          </div>
-        );
-      })}
+    <div className="w-full py-6">
+      <div className="relative flex items-center justify-between">
+        {/* Connecting Background Line */}
+        <div className="absolute left-0 top-1/2 -z-10 h-1 w-full -translate-y-1/2 rounded-full bg-ec-surface-raised" />
+        
+        {/* Active Progress Line */}
+        <div 
+          className="absolute left-0 top-1/2 -z-10 h-1 -translate-y-1/2 rounded-full bg-ec-accent transition-all duration-1000 ease-out" 
+          style={{ width: `${(currentMilestoneIndex / (MILESTONES.length - 1)) * 100}%` }}
+        />
+
+        {MILESTONES.map((milestone, index) => {
+          const isCompleted = index < currentMilestoneIndex;
+          const isActive = index === currentMilestoneIndex;
+          const isPending = index > currentMilestoneIndex;
+          
+          return (
+            <div key={milestone.label} className="relative flex flex-col items-center">
+              <div 
+                className={`flex h-8 w-8 items-center justify-center rounded-full border-4 border-ec-card transition-all duration-700 ${
+                  isCompleted ? "bg-ec-accent text-white" : 
+                  isActive ? "bg-ec-card ring-2 ring-ec-accent shadow-[0_0_15px_rgba(37,99,235,0.5)]" : 
+                  "bg-ec-surface-raised text-ec-text-muted"
+                }`}
+              >
+                {isActive && <div className="h-2.5 w-2.5 rounded-full bg-ec-accent animate-pulse" />}
+                {isCompleted && (
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+              <span 
+                className={`absolute top-10 whitespace-nowrap text-xs font-bold transition-colors ${
+                  isActive ? "text-ec-accent" : 
+                  isCompleted ? "text-ec-text" : 
+                  "text-ec-text-muted"
+                }`}
+              >
+                {milestone.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-12 text-center">
+        <span className="inline-flex items-center gap-2 rounded-full bg-ec-surface-raised px-4 py-1.5 text-xs font-semibold text-ec-text-secondary border border-ec-border shadow-sm">
+          Detailed Status: <span className="text-ec-accent">{STATUS_LABEL[status]}</span>
+        </span>
+      </div>
     </div>
   );
 }
@@ -1174,7 +1227,7 @@ export function ImporterWorkspace() {
   }
 
   return (
-    <main className="mx-auto grid w-full max-w-6xl flex-1 gap-6 px-4 py-8 md:px-8 lg:grid-cols-[minmax(320px,0.9fr)_minmax(0,1.35fr)]">
+    <main className="mx-auto grid w-full max-w-6xl flex-1 gap-6 px-4 py-8 md:px-8 lg:grid-cols-[340px_1fr]">
       <div className="space-y-5">
         <CreateShipmentForm busy={creating} onCreate={handleCreate} />
 

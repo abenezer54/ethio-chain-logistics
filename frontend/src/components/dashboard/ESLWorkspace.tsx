@@ -111,100 +111,46 @@ function CapacityMap({
   shipment?: Shipment;
   compact?: boolean;
 }) {
-  const { total, used, shipmentUnits } = capacityUnits(slot, shipment);
-  const canCarry = slotCanCarry(slot, shipment);
+  const percentUsed = 100 - capacityPercent(slot);
   const shipmentWeight = numberValue(shipment?.weight_kg);
   const capacity = numberValue(slot.capacity_kg);
-  const usesMinimumMarker =
-    canCarry &&
-    shipmentWeight > 0 &&
-    capacity > 0 &&
-    (shipmentWeight / capacity) * total < 1;
-  const columns = slot.transport_type === "SHIP" ? 6 : 4;
-  const cells = Array.from({ length: total }, (_, index) => {
-    const reservedEnd = used + shipmentUnits;
-    const isUsed = index < used;
-    const isShipment = canCarry && index >= used && index < reservedEnd;
-    const isFirstShipment = isShipment && index === used;
-    return { index, isUsed, isShipment, isFirstShipment };
-  });
+  const shipmentPercent = capacity > 0 ? (shipmentWeight / capacity) * 100 : 0;
+  
+  const canCarry = slotCanCarry(slot, shipment);
 
   return (
-    <div className={compact ? "mt-4" : "mt-5"}>
-      <div
-        className={`relative overflow-hidden border border-ec-border bg-ec-surface-raised ${
-          slot.transport_type === "SHIP"
-            ? "rounded-l-lg rounded-r-full px-4 py-4 pr-9"
-            : "rounded-lg p-3"
-        }`}
-      >
-        {slot.transport_type === "TRUCK" ? (
-          <div className="absolute right-2 top-1/2 hidden h-12 w-9 -translate-y-1/2 rounded-md border border-ec-border bg-ec-card sm:block" />
-        ) : (
-          <div className="absolute right-2 top-1/2 h-10 w-10 -translate-y-1/2 rounded-full border border-ec-border bg-ec-card/80" />
+    <div className={compact ? "mt-3" : "mt-5"}>
+      <div className="relative h-4 w-full overflow-hidden rounded-full bg-slate-100 border border-slate-200">
+        <div 
+          className="absolute top-0 left-0 h-full bg-slate-400 transition-all duration-500" 
+          style={{ width: `${percentUsed}%` }}
+        />
+        {shipmentWeight > 0 && canCarry && (
+          <div 
+            className="absolute top-0 h-full bg-orange-500 border-l-2 border-orange-600 animate-pulse transition-all duration-500 shadow-[0_0_10px_rgba(249,115,22,0.6)]" 
+            style={{ left: `${percentUsed}%`, width: `${shipmentPercent}%` }}
+          />
         )}
-        <div
-          className={`relative grid gap-1.5 ${compact ? "max-w-sm" : "max-w-md"}`}
-          style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-        >
-          {cells.map((cell) => (
-            <span
-              key={cell.index}
-              className={`flex h-8 items-center justify-center rounded-md border text-[9px] font-extrabold leading-none shadow-sm ${
-                cell.isUsed
-                  ? "border-slate-400 bg-slate-300"
-                  : cell.isShipment
-                    ? "border-orange-700 bg-orange-600 text-white ring-4 ring-orange-200"
-                    : "border-emerald-300 bg-emerald-100"
-              }`}
-              title={
-                cell.isShipment
-                  ? `This shipment: ${formatCapacity(shipment?.weight_kg)}`
-                  : undefined
-              }
-            >
-              {cell.isFirstShipment ? (
-                compact ? (
-                  <span className="h-2.5 w-2.5 rounded-full bg-white shadow-sm" />
-                ) : (
-                  "LOAD"
-                )
-              ) : null}
-            </span>
-          ))}
-        </div>
       </div>
-      {shipmentWeight > 0 ? (
-        <div
-          className={`mt-3 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-800 ${
-            compact ? "inline-flex" : "flex"
-          }`}
-        >
-          <span className="font-bold">Orange marker:</span>
-          <span className="ml-1">
-            this shipment is {formatCapacity(shipment?.weight_kg)}
-            {usesMinimumMarker
-              ? "; shown as one minimum visible block."
-              : "."}
-          </span>
-        </div>
-      ) : null}
-      {!compact ? (
-        <div className="mt-3 flex flex-wrap gap-3 text-xs text-ec-text-muted">
+      
+      {!compact && (
+        <div className="mt-3 flex flex-wrap gap-4 text-[11px] font-bold uppercase tracking-wider text-ec-text-muted">
           <span className="inline-flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded border border-slate-400 bg-slate-300" />
+            <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
             Used
           </span>
+          {shipmentWeight > 0 && (
+            <span className="inline-flex items-center gap-1.5 text-orange-600">
+              <span className="h-2.5 w-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]" />
+              This Shipment
+            </span>
+          )}
           <span className="inline-flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded border border-emerald-300 bg-emerald-100" />
+            <span className="h-2.5 w-2.5 rounded-full bg-slate-100 border border-slate-200" />
             Available
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded border border-ec-accent bg-ec-accent" />
-            This shipment
-          </span>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -447,14 +393,14 @@ function SlotPickerModal({
                             {selected ? "Selected" : canCarry ? "Open" : "Too small"}
                           </span>
                         </div>
-                        <div className="mt-3 flex justify-between text-xs text-ec-text-muted">
+                        <div className="mt-3 flex justify-between text-[11px] font-bold text-ec-text-muted uppercase tracking-wider">
                           <span>{formatCapacity(slot.remaining_capacity_kg)} left</span>
                           <span>{formatDate(slot.available_from)}</span>
                         </div>
-                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ec-border">
+                        <div className="mt-2 relative h-1.5 overflow-hidden rounded-full bg-slate-100">
                           <div
-                            className="h-full rounded-full bg-ec-accent"
-                            style={{ width: `${capacityPercent(slot)}%` }}
+                            className="absolute top-0 left-0 h-full bg-slate-400"
+                            style={{ width: `${100 - capacityPercent(slot)}%` }}
                           />
                         </div>
                       </button>
@@ -495,48 +441,30 @@ function SlotPickerModal({
 
                     <CapacityMap slot={previewSlot} shipment={shipment} />
 
-                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-lg border border-ec-border bg-ec-surface-raised p-3">
-                        <p className="text-xs font-semibold uppercase text-ec-text-muted">
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-ec-border bg-white shadow-sm p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-ec-text-muted">
                           Total capacity
                         </p>
-                        <p className="mt-1 font-bold text-ec-text">
+                        <p className="mt-1 text-lg font-black text-ec-text">
                           {formatCapacity(previewSlot.capacity_kg)}
                         </p>
                       </div>
-                      <div className="rounded-lg border border-ec-border bg-ec-surface-raised p-3">
-                        <p className="text-xs font-semibold uppercase text-ec-text-muted">
-                          Remaining
+                      <div className="rounded-xl border border-ec-border bg-white shadow-sm p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-ec-text-muted">
+                          Remaining capacity
                         </p>
-                        <p className="mt-1 font-bold text-ec-text">
+                        <p className="mt-1 text-lg font-black text-ec-text">
                           {formatCapacity(previewSlot.remaining_capacity_kg)}
-                        </p>
-                      </div>
-                      <div className="rounded-lg border border-ec-border bg-ec-surface-raised p-3">
-                        <p className="text-xs font-semibold uppercase text-ec-text-muted">
-                          One visual block
-                        </p>
-                        <p className="mt-1 font-bold text-ec-text">
-                          {formatCapacity(String(previewBlockKG))}
                         </p>
                       </div>
                     </div>
 
-                    <div className="mt-4 rounded-lg border border-ec-border bg-ec-card p-4">
-                      <div className="flex justify-between text-xs font-medium text-ec-text-muted">
-                        <span>{formatCapacity(previewSlot.remaining_capacity_kg)} left now</span>
-                        <span>{formatCapacity(previewSlot.capacity_kg)} total</span>
-                      </div>
-                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-ec-border">
-                        <div
-                          className="h-full rounded-full bg-ec-accent"
-                          style={{ width: `${capacityPercent(previewSlot)}%` }}
-                        />
-                      </div>
-                      <p className={`mt-3 text-sm ${previewCanCarry ? "text-ec-text-secondary" : "text-ec-danger"}`}>
+                    <div className="mt-4 rounded-xl border border-ec-border bg-slate-50 p-5">
+                      <p className={`text-sm font-bold ${previewCanCarry ? "text-emerald-700" : "text-red-600"}`}>
                         {previewCanCarry
-                          ? `After this shipment: ${formatCapacity(String(previewAfter))} remaining`
-                          : "This slot does not have enough remaining kg for the selected shipment."}
+                          ? `Adequate Capacity: ${formatCapacity(String(previewAfter))} will remain after allocation.`
+                          : "Insufficient Capacity: This slot cannot carry the selected shipment."}
                       </p>
                     </div>
                   </div>
@@ -664,7 +592,7 @@ export default function ESLWorkspace() {
 
   return (
     <>
-      <main className="mx-auto grid w-full max-w-7xl flex-1 gap-6 px-4 py-8 md:px-8 xl:grid-cols-[minmax(300px,0.9fr)_minmax(0,1.4fr)]">
+      <main className="mx-auto grid w-full max-w-6xl flex-1 gap-6 px-4 py-8 md:px-8 lg:grid-cols-[340px_1fr]">
         <section className="ec-card rounded-lg">
           <div className="flex items-start justify-between gap-3">
             <div>

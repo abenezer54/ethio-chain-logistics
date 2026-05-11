@@ -198,47 +198,94 @@ function SummaryPanel({ detail }: { detail: CustomsShipmentDetail }) {
 
 function DocumentPanel({ documents }: { documents: CustomsDocumentCheck[] }) {
   return (
-    <section className="ec-card rounded-lg">
-      <p className="text-xs font-semibold uppercase text-ec-accent">Document hashes</p>
-      <div className="mt-4 space-y-3">
+    <section className="ec-card rounded-lg overflow-hidden border-0 ring-1 ring-ec-border shadow-md">
+      <div className="bg-ec-surface-raised px-5 py-4 border-b border-ec-border">
+        <h3 className="flex items-center gap-2 font-bold text-ec-text">
+          <ShieldCheck className="text-ec-accent" size={20} />
+          Cryptographic Verification
+        </h3>
+        <p className="text-sm text-ec-text-secondary mt-1">
+          Comparing on-chain document hashes with calculated file hashes.
+        </p>
+      </div>
+
+      <div className="p-5 space-y-4 bg-[#f8fafc]">
         {documents.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-ec-border bg-ec-surface-raised p-6 text-center">
-            <FileWarning size={30} className="mx-auto text-ec-text-muted" aria-hidden />
-            <p className="mt-2 text-sm text-ec-text-secondary">No documents found.</p>
+          <div className="rounded-lg border-2 border-dashed border-ec-border bg-white p-8 text-center">
+            <FileWarning size={32} className="mx-auto text-ec-text-muted mb-3" aria-hidden />
+            <p className="text-sm font-semibold text-ec-text-secondary">No documents found for verification.</p>
           </div>
         ) : (
           documents.map((doc) => (
             <div
               key={`${doc.source}-${doc.id}`}
-              className="rounded-lg border border-ec-border bg-ec-surface-raised p-4"
+              className={`rounded-xl border bg-white p-5 shadow-sm transition-all duration-300 ${
+                doc.hash_matches
+                  ? "border-emerald-200 ring-1 ring-emerald-100 hover:shadow-emerald-100/50"
+                  : "border-red-200 ring-1 ring-red-100 hover:shadow-red-100/50"
+              }`}
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase text-ec-text-muted">
-                    {doc.source} - {docLabel(doc.doc_type)}
-                  </p>
-                  <h3 className="mt-1 truncate font-bold text-ec-text">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-ec-surface-raised text-ec-text-muted border border-ec-border">
+                      {doc.source}
+                    </span>
+                    <span className="text-xs font-semibold text-ec-text-secondary">
+                      {docLabel(doc.doc_type)}
+                    </span>
+                  </div>
+                  <h3 className="truncate font-bold text-ec-text text-base">
                     {doc.original_file_name}
                   </h3>
                 </div>
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                    doc.hash_matches
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                      : "border-red-200 bg-red-50 text-red-700"
-                  }`}
-                >
+                
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-sm ${
+                  doc.hash_matches 
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-700" 
+                    : "bg-red-50 border-red-200 text-red-700"
+                }`}>
                   {doc.hash_matches ? (
-                    <FileCheck2 size={14} aria-hidden />
+                    <>
+                      <div className="relative flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                      </div>
+                      <span className="text-xs font-bold uppercase tracking-wide">Verified Match</span>
+                    </>
                   ) : (
-                    <FileWarning size={14} aria-hidden />
+                    <>
+                      <FileWarning size={14} className="animate-pulse" aria-hidden />
+                      <span className="text-xs font-bold uppercase tracking-wide">Hash Mismatch</span>
+                    </>
                   )}
-                  {doc.hash_status.replaceAll("_", " ")}
-                </span>
+                </div>
               </div>
-              <div className="mt-3 grid gap-2 text-xs text-ec-text-muted md:grid-cols-[1fr_auto]">
-                <span className="truncate">SHA-256: {shortHash(doc.sha256_hash)}</span>
-                <span>{formatDateTime(doc.uploaded_at)}</span>
+
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                <div>
+                  <p className="text-[10px] font-bold uppercase text-slate-500 mb-1">Expected Hash (On-Chain)</p>
+                  <code className="block text-xs font-mono text-slate-700 truncate bg-white p-1.5 rounded border border-slate-200">
+                    {doc.sha256_hash || "No hash available"}
+                  </code>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase text-slate-500 mb-1">Calculated Hash (File)</p>
+                  <code className={`block text-xs font-mono truncate p-1.5 rounded border ${
+                    doc.hash_matches 
+                      ? "text-emerald-700 bg-emerald-50/50 border-emerald-100" 
+                      : "text-red-700 bg-red-50/50 border-red-100"
+                  }`}>
+                    {doc.sha256_hash || "No hash available"}
+                  </code>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center justify-end">
+                <span className="text-[10px] font-medium text-ec-text-muted flex items-center gap-1">
+                  <Clock size={10} />
+                  Timestamp: {formatDateTime(doc.uploaded_at)}
+                </span>
               </div>
             </div>
           ))
@@ -492,7 +539,7 @@ export default function CustomsWorkspace() {
 
   return (
     <>
-      <main className="mx-auto grid w-full max-w-7xl flex-1 gap-6 px-4 py-8 md:px-8 xl:grid-cols-[minmax(300px,0.9fr)_minmax(0,1.5fr)]">
+      <main className="mx-auto grid w-full max-w-6xl flex-1 gap-6 px-4 py-8 md:px-8 lg:grid-cols-[340px_1fr]">
         <section className="ec-card rounded-lg">
           <div className="flex items-start justify-between gap-3">
             <div>

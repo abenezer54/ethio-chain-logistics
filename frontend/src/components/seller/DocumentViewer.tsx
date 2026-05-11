@@ -8,9 +8,25 @@ type Doc = {
   shipment_id: string;
   original_file_name: string;
   content_type?: string;
+  size_bytes?: number;
+  sha256_hash?: string;
+  uploaded_at?: string;
 };
 
-import { ImageOff, FileText, File } from "lucide-react";
+import { ImageOff, FileText, File, Hash, Clock, HardDrive } from "lucide-react";
+
+// Helper to format bytes
+function formatBytes(bytes?: number): string {
+  if (bytes === undefined || !Number.isFinite(bytes) || bytes <= 0) return "Unknown size";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = bytes;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${size.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
 
 export default function DocumentViewer({
   docs,
@@ -130,26 +146,47 @@ export default function DocumentViewer({
                   </div>
                 )}
 
-                <div className="min-w-0">
-                  <span className="text-ec-text font-medium truncate block">
-                    {d.original_file_name}
-                  </span>
-                  <div className="text-xs text-ec-text-muted mt-1 uppercase">
-                    {d.content_type?.split("/")[1] ?? "unknown"}
-                    {url ? (
+                <div className="min-w-0 pt-2 border-t border-ec-border/50">
+                  <div className="flex items-start justify-between">
+                    <span className="text-ec-text font-bold truncate block">
+                      {d.original_file_name}
+                    </span>
+                    {url && (
                       <a
                         href={url}
                         download={d.original_file_name}
-                        className="mt-2 inline-block text-xs font-semibold text-ec-accent hover:underline"
+                        className="rounded-md bg-ec-accent/10 px-2 py-1 text-[10px] font-bold text-ec-accent hover:bg-ec-accent hover:text-white transition-colors"
                       >
                         Download
                       </a>
-                    ) : (
-                      <span className="mt-2 inline-block text-xs text-ec-text-muted">
-                        Loading file...
-                      </span>
                     )}
                   </div>
+                  
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-ec-text-muted">
+                    <div className="flex items-center gap-1.5">
+                      <HardDrive size={12} className="text-ec-accent/60" />
+                      {formatBytes(d.size_bytes)}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Clock size={12} className="text-ec-accent/60" />
+                      {d.uploaded_at ? new Date(d.uploaded_at).toLocaleDateString() : "Unknown date"}
+                    </div>
+                  </div>
+
+                  {d.sha256_hash && (
+                    <div className="mt-3 flex items-center gap-2 rounded bg-ec-surface px-2 py-1.5 font-mono text-[9px] text-ec-text-secondary border border-ec-border">
+                      <Hash size={10} className="text-emerald-500 shrink-0" />
+                      <span className="truncate" title={d.sha256_hash}>
+                        {d.sha256_hash.slice(0, 16)}...{d.sha256_hash.slice(-8)}
+                      </span>
+                    </div>
+                  )}
+
+                  {!url && (
+                    <span className="mt-2 inline-block text-xs text-ec-text-muted animate-pulse">
+                      Generating secure link...
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
