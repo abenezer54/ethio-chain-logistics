@@ -45,12 +45,11 @@ JOIN users u ON u.id = $1
 WHERE u.role = 'TRANSPORTER'
   AND s.status IN ('ALLOCATED', 'IN_TRANSIT', 'ARRIVED', 'AT_CUSTOMS')
   AND (
-    lower(COALESCE(u.truck_id, '')) = lower(ts.reference_code)
+    COALESCE(u.carrier_company, '') = ''
+    OR COALESCE(u.truck_id, '') = ''
+    OR lower(COALESCE(u.truck_id, '')) = lower(ts.reference_code)
     OR lower(COALESCE(u.truck_id, '')) = lower(ts.name)
-    OR (
-      COALESCE(u.carrier_company, '') <> ''
-      AND lower(ts.name) LIKE '%' || lower(u.carrier_company) || '%'
-    )
+    OR lower(ts.name) LIKE '%' || lower(u.carrier_company) || '%'
   )
 ORDER BY s.updated_at DESC, a.leg_type, a.created_at
 LIMIT $2
@@ -198,12 +197,11 @@ WHERE s.id = $2
   AND u.role = 'TRANSPORTER'
   AND s.status IN ('ALLOCATED', 'IN_TRANSIT', 'ARRIVED', 'AT_CUSTOMS')
   AND (
-    lower(COALESCE(u.truck_id, '')) = lower(ts.reference_code)
+    COALESCE(u.carrier_company, '') = ''
+    OR COALESCE(u.truck_id, '') = ''
+    OR lower(COALESCE(u.truck_id, '')) = lower(ts.reference_code)
     OR lower(COALESCE(u.truck_id, '')) = lower(ts.name)
-    OR (
-      COALESCE(u.carrier_company, '') <> ''
-      AND lower(ts.name) LIKE '%' || lower(u.carrier_company) || '%'
-    )
+    OR lower(ts.name) LIKE '%' || lower(u.carrier_company) || '%'
   )` + tail
 	item, err := scanTransporterShipment(db.QueryRow(ctx, q, transporterID, shipmentID, allocationID))
 	if err != nil {

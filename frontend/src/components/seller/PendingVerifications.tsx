@@ -28,12 +28,15 @@ export default function PendingVerifications({
           key={s.id}
           type="button"
           onClick={() => onSelect?.(s.id)}
-          className="group relative flex flex-col overflow-hidden rounded-xl border border-ec-border bg-white p-5 shadow-sm transition-all hover:border-action/30 hover:shadow-md active:scale-[0.98]"
+          className="group relative flex flex-col overflow-hidden rounded-xl bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg active:scale-[0.98]"
         >
-          {/* Status strip */}
-          <div className="absolute top-0 right-0 h-1 w-12 bg-action opacity-60" />
+          {/* Animated Gradient Spotlight Border */}
+          <div className="absolute inset-0 z-0 rounded-xl bg-gradient-to-r from-orange-400 via-red-500 to-orange-400 p-[2px] opacity-70 bg-[length:200%_auto] animate-[gradient_3s_linear_infinite]">
+            <div className="h-full w-full rounded-[10px] bg-white" />
+          </div>
 
-          <div className="flex items-center justify-between mb-3">
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-3">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-ec-surface px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-ec-text-muted ring-1 ring-ec-border">
               <span className="h-1.5 w-1.5 rounded-full bg-action animate-pulse" />
               Action Required
@@ -58,6 +61,7 @@ export default function PendingVerifications({
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-action/5 text-action transition-transform group-hover:translate-x-1">
               <ChevronRight size={20} />
             </div>
+          </div>
           </div>
         </button>
       ))}
