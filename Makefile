@@ -3,7 +3,8 @@ ENV_FILE = .env
 BACKEND_DIR = backend
 
 .PHONY: up down restart logs ps db-shell db-reset clean \
-	backend-tidy backend-run backend-test backend-build backend-migrate-up frontend
+	backend-tidy backend-run backend-test backend-build backend-migrate-up frontend \
+	blockchain-install blockchain-node blockchain-test blockchain-deploy-local
 
 up:
 	$(COMPOSE) --env-file $(ENV_FILE) up --build -d
@@ -57,3 +58,16 @@ backend-migrate-up:
 frontend:
 	@echo "Starting frontend on http://localhost:3000 ..."
 	cd frontend && NEXT_PUBLIC_API_BASE=http://localhost:8080 npm run dev
+
+# Blockchain
+blockchain-install:
+	cd blockchain && npm install
+
+blockchain-node:
+	cd blockchain && npm run node
+
+blockchain-test:
+	cd blockchain && npm test
+
+blockchain-deploy-local:
+	cd blockchain && npm run deploy:local

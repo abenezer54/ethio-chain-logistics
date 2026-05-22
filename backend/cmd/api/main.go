@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	chain "github.com/abenezer54/ethio-chain-logistics/backend/internal/blockchain"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/config"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/delivery/controller"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
@@ -56,6 +57,33 @@ func main() {
 	customsRepo := repository.NewCustomsRepo(pool)
 	customsUC := usecase.NewCustomsUsecase(customsRepo)
 	customsHandlers := controller.NewCustomsHandlers(customsUC, cfg.UploadDir)
+
+	var anchorCancel context.CancelFunc
+	if cfg.BlockchainEnabled {
+		anchorClient, err := chain.NewEthereumAnchorClient(ctx, chain.EthereumConfig{
+			RPCURL:          cfg.BlockchainRPCURL,
+			ChainID:         cfg.BlockchainChainID,
+			PrivateKey:      cfg.BlockchainPrivateKey,
+			ContractAddress: cfg.AnchorContractAddress,
+		})
+		if err != nil {
+			log.Fatalf("blockchain: %v", err)
+		}
+		defer anchorClient.Close()
+
+		anchorCtx, cancel := context.WithCancel(context.Background())
+		anchorCancel = cancel
+		defer anchorCancel()
+
+		anchorWorker := chain.NewAnchorWorker(
+			repository.NewAnchorJobRepo(pool),
+			anchorClient,
+			cfg.AnchorWorkerInterval,
+			cfg.AnchorConfirmTimeout,
+		)
+		go anchorWorker.Run(anchorCtx)
+		log.Printf("blockchain anchoring enabled on %s chain_id=%s contract=%s", cfg.BlockchainNetwork, cfg.BlockchainChainID, cfg.AnchorContractAddress)
+	}
 
 	bootstrapAdmin(ctx, userRepo)
 
@@ -107,6 +135,10 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+
+	if anchorCancel != nil {
+		anchorCancel()
+	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()

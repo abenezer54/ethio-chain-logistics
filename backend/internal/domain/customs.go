@@ -12,6 +12,8 @@ type CustomsDocumentCheck struct {
 	SizeBytes          int64                      `json:"size_bytes"`
 	SHA256Hash         string                     `json:"sha256_hash"`
 	VerificationStatus DocumentVerificationStatus `json:"verification_status,omitempty"`
+	AnchorStatus       AnchorStatus               `json:"anchor_status"`
+	BlockchainTxHash   string                     `json:"blockchain_tx_hash,omitempty"`
 	HashMatches        bool                       `json:"hash_matches"`
 	HashStatus         string                     `json:"hash_status"`
 	UploadedAt         time.Time                  `json:"uploaded_at"`

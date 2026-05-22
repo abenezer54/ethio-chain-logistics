@@ -1,5 +1,6 @@
 import { API_BASE, apiFetch } from "@/lib/api";
 import type {
+  AnchorStatus,
   DocumentVerificationStatus,
   Shipment,
   ShipmentEvent,
@@ -15,6 +16,8 @@ export type CustomsDocumentCheck = {
   size_bytes: number;
   sha256_hash: string;
   verification_status?: DocumentVerificationStatus;
+  anchor_status: AnchorStatus;
+  blockchain_tx_hash?: string;
   hash_matches: boolean;
   hash_status: string;
   uploaded_at: string;

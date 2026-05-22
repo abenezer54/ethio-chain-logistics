@@ -202,6 +202,16 @@ RETURNING id, uploaded_at
 		).Scan(&docs[i].ID, &docs[i].UploadedAt); err != nil {
 			return domain.ShipmentDetail{}, fmt.Errorf("insert shipment document: %w", err)
 		}
+		if err := enqueueAnchorJobTx(ctx, tx,
+			"shipment_documents",
+			docs[i].ID,
+			shipmentID,
+			domain.AnchorRecordTypeImporterDocument,
+			docs[i].SHA256Hash,
+			"",
+		); err != nil {
+			return domain.ShipmentDetail{}, err
+		}
 		insertedTypes = append(insertedTypes, string(docs[i].DocType))
 	}
 
@@ -296,19 +306,28 @@ func (r *ShipmentRepo) GetImporterSellerDocument(ctx context.Context, importerID
 SELECT
   d.id, d.shipment_id, d.seller_id,
   d.doc_type, d.original_file_name, d.content_type,
-  d.size_bytes, d.storage_key, d.sha256_hash, d.uploaded_at
+  d.size_bytes, d.storage_key, d.sha256_hash,
+  d.anchor_status, COALESCE(d.blockchain_tx_hash, ''),
+  d.uploaded_at
 FROM seller_documents d
 JOIN shipments s ON s.id = d.shipment_id
 WHERE d.id = $1 AND d.shipment_id = $2 AND s.importer_id = $3
 `
 	row := r.pool.inner.QueryRow(ctx, q, docID, shipmentID, importerID)
 	var d domain.SellerDocument
-	if err := row.Scan(&d.ID, &d.ShipmentID, &d.SellerID, &d.DocType, &d.OriginalFileName, &d.ContentType, &d.SizeBytes, &d.StorageKey, &d.SHA256Hash, &d.UploadedAt); err != nil {
+	var anchorStatus string
+	if err := row.Scan(
+		&d.ID, &d.ShipmentID, &d.SellerID, &d.DocType,
+		&d.OriginalFileName, &d.ContentType, &d.SizeBytes,
+		&d.StorageKey, &d.SHA256Hash, &anchorStatus,
+		&d.BlockchainTxHash, &d.UploadedAt,
+	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.SellerDocument{}, domain.ErrNotFound
 		}
 		return domain.SellerDocument{}, fmt.Errorf("get importer seller document: %w", err)
 	}
+	d.AnchorStatus = domain.AnchorStatus(anchorStatus)
 	return d, nil
 }
 
@@ -367,7 +386,11 @@ ORDER BY uploaded_at ASC
 
 func (r *ShipmentRepo) listSellerDocuments(ctx context.Context, shipmentID string) ([]domain.SellerDocument, error) {
 	const q = `
-SELECT id, shipment_id, seller_id, doc_type, original_file_name, content_type, size_bytes, storage_key, sha256_hash, uploaded_at
+SELECT
+  id, shipment_id, seller_id, doc_type,
+  original_file_name, content_type, size_bytes,
+  storage_key, sha256_hash, anchor_status,
+  COALESCE(blockchain_tx_hash, ''), uploaded_at
 FROM seller_documents
 WHERE shipment_id = $1
 ORDER BY uploaded_at ASC
@@ -381,9 +404,16 @@ ORDER BY uploaded_at ASC
 	out := make([]domain.SellerDocument, 0)
 	for rows.Next() {
 		var d domain.SellerDocument
-		if err := rows.Scan(&d.ID, &d.ShipmentID, &d.SellerID, &d.DocType, &d.OriginalFileName, &d.ContentType, &d.SizeBytes, &d.StorageKey, &d.SHA256Hash, &d.UploadedAt); err != nil {
+		var anchorStatus string
+		if err := rows.Scan(
+			&d.ID, &d.ShipmentID, &d.SellerID, &d.DocType,
+			&d.OriginalFileName, &d.ContentType, &d.SizeBytes,
+			&d.StorageKey, &d.SHA256Hash, &anchorStatus,
+			&d.BlockchainTxHash, &d.UploadedAt,
+		); err != nil {
 			return nil, fmt.Errorf("scan seller document: %w", err)
 		}
+		d.AnchorStatus = domain.AnchorStatus(anchorStatus)
 		out = append(out, d)
 	}
 	if err := rows.Err(); err != nil {
@@ -500,6 +530,16 @@ RETURNING
 	))
 	if err != nil {
 		return domain.ShipmentEvent{}, fmt.Errorf("append shipment event: %w", err)
+	}
+	if err := enqueueAnchorJobTx(ctx, tx,
+		"shipment_events",
+		event.ID,
+		input.ShipmentID,
+		domain.AnchorRecordTypeShipmentEvent,
+		event.EventHash,
+		event.PreviousEventHash,
+	); err != nil {
+		return domain.ShipmentEvent{}, err
 	}
 	return event, nil
 }

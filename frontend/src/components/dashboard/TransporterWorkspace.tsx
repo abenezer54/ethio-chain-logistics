@@ -17,6 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
+import { BlockchainProofBadge } from "@/components/ui/BlockchainProofBadge";
 import { useToast } from "@/components/ui/ToastProvider";
 import { getStoredToken } from "@/lib/auth-storage";
 import type { Shipment, ShipmentEvent, ShipmentStatus } from "@/lib/shipments";
@@ -592,6 +593,10 @@ function Timeline({ events }: { events: ShipmentEvent[] }) {
                       {note}
                     </span>
                   ) : null}
+                  <BlockchainProofBadge
+                    status={event.anchor_status}
+                    txHash={event.blockchain_tx_hash}
+                  />
                 </div>
               </div>
             );

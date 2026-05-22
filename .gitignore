@@ -18,7 +18,11 @@ backend/tmp/
 backend/*.exe
 backend/*.out
 
-# Blockchain (Hyperledger Fabric)
+# Blockchain
+blockchain/node_modules/
+blockchain/cache/
+blockchain/artifacts/
+blockchain/deployments/
 blockchain/network/organizations/peerOrganizations/
 blockchain/network/organizations/ordererOrganizations/
 blockchain/network/channel-artifacts/

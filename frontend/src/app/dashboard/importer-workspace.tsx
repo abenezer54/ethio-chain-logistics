@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { BlockchainProofBadge } from "@/components/ui/BlockchainProofBadge";
 import { useToast } from "@/components/ui/ToastProvider";
 import { getStoredToken } from "@/lib/auth-storage";
 import {
@@ -724,6 +725,8 @@ type ShipmentFileItem = {
   content_type: string;
   size_bytes: number;
   sha256_hash: string;
+  anchor_status?: "PENDING" | "ANCHORED" | "FAILED";
+  blockchain_tx_hash?: string;
   uploaded_at: string;
   verification_status?: DocumentVerificationStatus;
 };
@@ -764,18 +767,24 @@ function DocumentsList({
                 {doc.original_file_name}
               </p>
             </div>
-            <a
-              href={downloadUrl(shipmentID, doc.id)}
-              target="_blank"
-              rel="noreferrer"
-              className="ec-btn-ghost border border-ec-border bg-ec-card"
-              onClick={(e) => {
-                if (!token) e.preventDefault();
-              }}
-            >
-              <Download size={16} aria-hidden />
-              Download
-            </a>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <BlockchainProofBadge
+                status={doc.anchor_status}
+                txHash={doc.blockchain_tx_hash}
+              />
+              <a
+                href={downloadUrl(shipmentID, doc.id)}
+                target="_blank"
+                rel="noreferrer"
+                className="ec-btn-ghost border border-ec-border bg-ec-card"
+                onClick={(e) => {
+                  if (!token) e.preventDefault();
+                }}
+              >
+                <Download size={16} aria-hidden />
+                Download
+              </a>
+            </div>
           </div>
           <div className="mt-3 grid gap-2 text-xs text-ec-text-muted sm:grid-cols-3">
             <span className="inline-flex items-center gap-1.5">
@@ -887,6 +896,21 @@ function Timeline({ events }: { events: ShipmentEvent[] }) {
               {toStatus &&
                 ` -> ${STATUS_LABEL[toStatus as ShipmentStatus] || toStatus}`}
             </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full border px-2.5 py-1 font-mono text-xs ${
+                  isRejection
+                    ? "border-red-200 bg-white/70 text-red-700"
+                    : "border-ec-border bg-ec-surface-raised text-ec-text-muted"
+                }`}
+              >
+                {shortHash(event.event_hash)}
+              </span>
+              <BlockchainProofBadge
+                status={event.anchor_status}
+                txHash={event.blockchain_tx_hash}
+              />
+            </div>
           </li>
         );
       })}

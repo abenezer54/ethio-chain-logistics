@@ -72,6 +72,8 @@ export type SellerDocument = {
   size_bytes: number;
   storage_key: string;
   sha256_hash: string;
+  anchor_status: AnchorStatus;
+  blockchain_tx_hash?: string;
   uploaded_at: string;
 };
 

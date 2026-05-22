@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
 )
@@ -89,13 +88,6 @@ func (u *SellerUsecase) VerifyShipment(ctx context.Context, sellerID, shipmentID
 		Reason:     reason,
 	}
 
-	// Simulate blockchain recording
-	txid, err := simulateBlockchainRecord(ctx, shipmentID, sellerID, action, checks, reason)
-	if err != nil {
-		return domain.SellerVerification{}, fmt.Errorf("blockchain record failed: %w", err)
-	}
-	v.TxID = txid
-
 	// Persist verification
 	v2, err := u.repo.CreateVerification(ctx, v)
 	if err != nil {
@@ -149,16 +141,4 @@ func (u *SellerUsecase) ListAllShipments(ctx context.Context, sellerID string, l
 
 func (u *SellerUsecase) ListNotifications(ctx context.Context, userID string, limit int) ([]domain.Notification, error) {
 	return u.repo.ListNotifications(ctx, userID, limit)
-}
-
-// simulateBlockchainRecord simulates writing an event to a blockchain and returns a tx id
-func simulateBlockchainRecord(ctx context.Context, shipmentID, sellerID, action string, checks map[string]bool, reason string) (string, error) {
-	// Simulate latency
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	case <-time.After(200 * time.Millisecond):
-	}
-	// Create a pseudo tx id
-	return fmt.Sprintf("tx_%s_%d", shipmentID, time.Now().UnixNano()), nil
 }

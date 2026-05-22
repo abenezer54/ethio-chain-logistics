@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -23,7 +22,12 @@ func (r *SellerRepo) ListPendingShipments(ctx context.Context, sellerID string, 
 		limit = 100
 	}
 	const q = `
-SELECT id, importer_id, seller_id, origin_port, destination_port, cargo_type, weight_kg, volume_cbm, status, anchor_status, created_at, updated_at
+SELECT
+  id, importer_id, seller_id,
+  origin_port, destination_port, cargo_type,
+  weight_kg::text, COALESCE(volume_cbm::text, ''),
+  status, anchor_status, COALESCE(blockchain_tx_hash, ''),
+  created_at, updated_at
 FROM shipments
 -- Pending for seller: only shown after importer uploads documents
 WHERE seller_id = $1 AND status IN ('DOCS_UPLOADED', 'PENDING_VERIFICATION')
@@ -37,8 +41,8 @@ LIMIT $2
 	defer rows.Close()
 	out := []domain.Shipment{}
 	for rows.Next() {
-		var s domain.Shipment
-		if err := rows.Scan(&s.ID, &s.ImporterID, &s.SellerID, &s.OriginPort, &s.DestinationPort, &s.CargoType, &s.WeightKG, &s.VolumeCBM, &s.Status, &s.AnchorStatus, &s.CreatedAt, &s.UpdatedAt); err != nil {
+		s, err := scanShipment(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan shipment: %w", err)
 		}
 		out = append(out, s)
@@ -51,7 +55,12 @@ LIMIT $2
 
 func (r *SellerRepo) GetShipmentDocuments(ctx context.Context, shipmentID string) ([]domain.ShipmentDocument, error) {
 	const q = `
-SELECT id, doc_type, original_file_name, content_type, size_bytes, storage_key, sha256_hash, uploaded_at
+SELECT
+  id, shipment_id, doc_type,
+  original_file_name, content_type, size_bytes,
+  storage_key, sha256_hash, verification_status,
+  uploaded_by, COALESCE(ipfs_cid, ''), anchor_status,
+  COALESCE(blockchain_tx_hash, ''), uploaded_at
 FROM shipment_documents
 WHERE shipment_id = $1
 ORDER BY uploaded_at ASC
@@ -63,8 +72,8 @@ ORDER BY uploaded_at ASC
 	defer rows.Close()
 	out := []domain.ShipmentDocument{}
 	for rows.Next() {
-		var d domain.ShipmentDocument
-		if err := rows.Scan(&d.ID, &d.DocType, &d.OriginalFileName, &d.ContentType, &d.SizeBytes, &d.StorageKey, &d.SHA256Hash, &d.UploadedAt); err != nil {
+		d, err := scanDocument(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan doc: %w", err)
 		}
 		out = append(out, d)
@@ -76,33 +85,70 @@ ORDER BY uploaded_at ASC
 }
 
 func (r *SellerRepo) AddSellerDocument(ctx context.Context, shipmentID, sellerID string, doc domain.SellerDocument) (domain.SellerDocument, error) {
+	tx, err := r.pool.inner.Begin(ctx)
+	if err != nil {
+		return domain.SellerDocument{}, fmt.Errorf("begin add seller document: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	const q = `
-INSERT INTO seller_documents (shipment_id, seller_id, doc_type, original_file_name, content_type, size_bytes, storage_key, sha256_hash)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-RETURNING id, uploaded_at
+INSERT INTO seller_documents (
+  shipment_id, seller_id, doc_type,
+  original_file_name, content_type, size_bytes,
+  storage_key, sha256_hash, anchor_status
+)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+RETURNING id, anchor_status, COALESCE(blockchain_tx_hash, ''), uploaded_at
 `
-	row := r.pool.inner.QueryRow(ctx, q, shipmentID, sellerID, doc.DocType, doc.OriginalFileName, doc.ContentType, doc.SizeBytes, doc.StorageKey, doc.SHA256Hash)
-	var id string
-	var uploaded time.Time
-	if err := row.Scan(&id, &uploaded); err != nil {
+	var anchorStatus string
+	if err := tx.QueryRow(ctx, q,
+		shipmentID, sellerID, doc.DocType,
+		doc.OriginalFileName, doc.ContentType, doc.SizeBytes,
+		doc.StorageKey, doc.SHA256Hash, domain.AnchorStatusPending,
+	).Scan(&doc.ID, &anchorStatus, &doc.BlockchainTxHash, &doc.UploadedAt); err != nil {
 		return domain.SellerDocument{}, fmt.Errorf("add seller doc: %w", err)
 	}
-	doc.ID = id
-	doc.UploadedAt = uploaded
+	doc.ShipmentID = shipmentID
+	doc.SellerID = sellerID
+	doc.AnchorStatus = domain.AnchorStatus(anchorStatus)
+	if err := enqueueAnchorJobTx(ctx, tx,
+		"seller_documents",
+		doc.ID,
+		shipmentID,
+		domain.AnchorRecordTypeSellerDocument,
+		doc.SHA256Hash,
+		"",
+	); err != nil {
+		return domain.SellerDocument{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.SellerDocument{}, fmt.Errorf("commit add seller document: %w", err)
+	}
 	return doc, nil
 }
 
 func (r *SellerRepo) GetSellerDocument(ctx context.Context, docID string) (domain.SellerDocument, error) {
 	const q = `
-SELECT id, shipment_id, seller_id, doc_type, original_file_name, content_type, size_bytes, storage_key, sha256_hash, uploaded_at
+SELECT
+  id, shipment_id, seller_id, doc_type,
+  original_file_name, content_type, size_bytes,
+  storage_key, sha256_hash, anchor_status,
+  COALESCE(blockchain_tx_hash, ''), uploaded_at
 FROM seller_documents
 WHERE id = $1
 `
 	row := r.pool.inner.QueryRow(ctx, q, docID)
 	var d domain.SellerDocument
-	if err := row.Scan(&d.ID, &d.ShipmentID, &d.SellerID, &d.DocType, &d.OriginalFileName, &d.ContentType, &d.SizeBytes, &d.StorageKey, &d.SHA256Hash, &d.UploadedAt); err != nil {
+	var anchorStatus string
+	if err := row.Scan(
+		&d.ID, &d.ShipmentID, &d.SellerID, &d.DocType,
+		&d.OriginalFileName, &d.ContentType, &d.SizeBytes,
+		&d.StorageKey, &d.SHA256Hash, &anchorStatus,
+		&d.BlockchainTxHash, &d.UploadedAt,
+	); err != nil {
 		return domain.SellerDocument{}, fmt.Errorf("get seller doc: %w", err)
 	}
+	d.AnchorStatus = domain.AnchorStatus(anchorStatus)
 	return d, nil
 }
 
@@ -160,14 +206,26 @@ func (r *SellerRepo) SetShipmentStatus(ctx context.Context, shipmentID, status s
 }
 
 func (r *SellerRepo) CreateShipmentEvent(ctx context.Context, shipmentID, actorID, action, message string, fromStatus, toStatus domain.ShipmentStatus, metadata map[string]any) error {
-	const q = `
-INSERT INTO shipment_events (shipment_id, actor_id, actor_role, action, from_status, to_status, message, metadata, event_hash)
-VALUES ($1, $2, 'SELLER', $3, $4, $5, $6, $7, gen_random_uuid()::text)
-`
-	metadataJson, _ := json.Marshal(metadata)
-	_, err := r.pool.inner.Exec(ctx, q, shipmentID, actorID, action, fromStatus, toStatus, message, metadataJson)
+	tx, err := r.pool.inner.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("create shipment event: %w", err)
+		return fmt.Errorf("begin create shipment event: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := (&ShipmentRepo{pool: r.pool}).appendEvent(ctx, tx, shipmentEventInput{
+		ShipmentID: shipmentID,
+		ActorID:    actorID,
+		ActorRole:  domain.RoleSeller,
+		Action:     action,
+		FromStatus: fromStatus,
+		ToStatus:   toStatus,
+		Message:    message,
+		Metadata:   metadata,
+	}); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit create shipment event: %w", err)
 	}
 	return nil
 }
@@ -177,7 +235,12 @@ func (r *SellerRepo) ListApprovedShipments(ctx context.Context, sellerID string,
 		limit = 100
 	}
 	const q = `
-	SELECT id, importer_id, seller_id, origin_port, destination_port, cargo_type, weight_kg, volume_cbm, status, anchor_status, created_at, updated_at
+	SELECT
+	  id, importer_id, seller_id,
+	  origin_port, destination_port, cargo_type,
+	  weight_kg::text, COALESCE(volume_cbm::text, ''),
+	  status, anchor_status, COALESCE(blockchain_tx_hash, ''),
+	  created_at, updated_at
 	FROM shipments
 	WHERE seller_id = $1 AND status IN ('VERIFIED', 'EXPORT_DOCS_UPLOADED')
 	ORDER BY updated_at DESC
@@ -190,8 +253,8 @@ func (r *SellerRepo) ListApprovedShipments(ctx context.Context, sellerID string,
 	defer rows.Close()
 	out := []domain.Shipment{}
 	for rows.Next() {
-		var s domain.Shipment
-		if err := rows.Scan(&s.ID, &s.ImporterID, &s.SellerID, &s.OriginPort, &s.DestinationPort, &s.CargoType, &s.WeightKG, &s.VolumeCBM, &s.Status, &s.AnchorStatus, &s.CreatedAt, &s.UpdatedAt); err != nil {
+		s, err := scanShipment(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan shipment: %w", err)
 		}
 		out = append(out, s)
@@ -208,7 +271,12 @@ func (r *SellerRepo) ListAllShipments(ctx context.Context, sellerID string, limi
 		limit = 100
 	}
 	const q = `
-	SELECT id, importer_id, seller_id, origin_port, destination_port, cargo_type, weight_kg, volume_cbm, status, anchor_status, created_at, updated_at
+	SELECT
+	  id, importer_id, seller_id,
+	  origin_port, destination_port, cargo_type,
+	  weight_kg::text, COALESCE(volume_cbm::text, ''),
+	  status, anchor_status, COALESCE(blockchain_tx_hash, ''),
+	  created_at, updated_at
 	FROM shipments
 	WHERE seller_id = $1
 	ORDER BY updated_at DESC
@@ -221,8 +289,8 @@ func (r *SellerRepo) ListAllShipments(ctx context.Context, sellerID string, limi
 	defer rows.Close()
 	out := []domain.Shipment{}
 	for rows.Next() {
-		var s domain.Shipment
-		if err := rows.Scan(&s.ID, &s.ImporterID, &s.SellerID, &s.OriginPort, &s.DestinationPort, &s.CargoType, &s.WeightKG, &s.VolumeCBM, &s.Status, &s.AnchorStatus, &s.CreatedAt, &s.UpdatedAt); err != nil {
+		s, err := scanShipment(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan shipment: %w", err)
 		}
 		out = append(out, s)
