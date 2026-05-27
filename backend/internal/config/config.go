@@ -15,6 +15,10 @@ type Config struct {
 	GinMode               string
 	JWTSecret             string
 	UploadDir             string
+	StorageProvider       string
+	SupabaseURL           string
+	SupabaseServiceRoleKey string
+	SupabaseStorageBucket  string
 	FromEmail             string
 	BlockchainEnabled     bool
 	BlockchainNetwork     string
@@ -39,6 +43,10 @@ func Load() (Config, error) {
 		GinMode:               os.Getenv("GIN_MODE"),
 		JWTSecret:             os.Getenv("JWT_SECRET"),
 		UploadDir:             os.Getenv("UPLOAD_DIR"),
+		StorageProvider:       stringEnv("STORAGE_PROVIDER", "local"),
+		SupabaseURL:           strings.TrimSpace(os.Getenv("SUPABASE_URL")),
+		SupabaseServiceRoleKey: strings.TrimSpace(os.Getenv("SUPABASE_SERVICE_ROLE_KEY")),
+		SupabaseStorageBucket:  stringEnv("SUPABASE_STORAGE_BUCKET", "ethio-chain-uploads"),
 		FromEmail:             os.Getenv("FROM_EMAIL"),
 		BlockchainEnabled:     boolEnv("BLOCKCHAIN_ENABLED", false),
 		BlockchainNetwork:     stringEnv("BLOCKCHAIN_NETWORK", "hardhat-local"),
@@ -62,11 +70,25 @@ func Load() (Config, error) {
 	if cfg.UploadDir == "" {
 		cfg.UploadDir = "uploads"
 	}
+	if cfg.StorageProvider == "" {
+		cfg.StorageProvider = "local"
+	}
 	if cfg.FromEmail == "" {
 		cfg.FromEmail = "no-reply@local.dev"
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL or POSTGRES_* variables must be set")
+	}
+	if cfg.StorageProvider == "supabase" {
+		if cfg.SupabaseURL == "" {
+			return Config{}, fmt.Errorf("SUPABASE_URL is required when STORAGE_PROVIDER=supabase")
+		}
+		if cfg.SupabaseServiceRoleKey == "" {
+			return Config{}, fmt.Errorf("SUPABASE_SERVICE_ROLE_KEY is required when STORAGE_PROVIDER=supabase")
+		}
+		if cfg.SupabaseStorageBucket == "" {
+			return Config{}, fmt.Errorf("SUPABASE_STORAGE_BUCKET is required when STORAGE_PROVIDER=supabase")
+		}
 	}
 	if cfg.BlockchainEnabled {
 		if strings.TrimSpace(cfg.BlockchainPrivateKey) == "" {

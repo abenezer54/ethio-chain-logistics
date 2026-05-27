@@ -15,6 +15,7 @@ import (
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/delivery/controller"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/repository"
+	"github.com/abenezer54/ethio-chain-logistics/backend/internal/storage"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/usecase"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -36,18 +37,26 @@ func main() {
 
 	healthUC := usecase.NewHealthUsecase(pool)
 
+	var fileStore storage.FileStore
+	switch cfg.StorageProvider {
+	case "supabase":
+		fileStore = storage.NewSupabaseFileStore(cfg.SupabaseURL, cfg.SupabaseStorageBucket, cfg.SupabaseServiceRoleKey)
+	default:
+		fileStore = storage.NewLocalFileStore(cfg.UploadDir)
+	}
+
 	userRepo := repository.NewUserRepo(pool)
 	docRepo := repository.NewKYCDocRepo(pool)
 	shipmentRepo := repository.NewShipmentRepo(pool)
 	emailSender := usecase.NoopEmailSender{}
 	authUC := usecase.NewAuthUsecase(userRepo, docRepo, emailSender, cfg.JWTSecret)
 	shipmentUC := usecase.NewShipmentUsecase(shipmentRepo)
-	authHandlers := controller.NewAuthHandlers(authUC, cfg.UploadDir)
+	authHandlers := controller.NewAuthHandlers(authUC, fileStore)
 	adminHandlers := controller.NewAdminHandlers(authUC, cfg.UploadDir)
-	importerHandlers := controller.NewImporterHandlers(shipmentUC, cfg.UploadDir)
+	importerHandlers := controller.NewImporterHandlers(shipmentUC, fileStore)
 	sellerRepo := repository.NewSellerRepo(pool)
 	sellerUC := usecase.NewSellerUsecase(sellerRepo)
-	sellerHandlers := controller.NewSellerHandlers(sellerUC, cfg.UploadDir)
+	sellerHandlers := controller.NewSellerHandlers(sellerUC, fileStore)
 	eslRepo := repository.NewESLRepo(pool)
 	eslUC := usecase.NewESLUsecase(eslRepo)
 	eslHandlers := controller.NewESLHandlers(eslUC)

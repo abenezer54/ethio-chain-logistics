@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
+	"path"
 	"strconv"
 	"strings"
 
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
+	"github.com/abenezer54/ethio-chain-logistics/backend/internal/storage"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/usecase"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -21,11 +21,11 @@ import (
 
 type ImporterHandlers struct {
 	shipments *usecase.ShipmentUsecase
-	uploadDir string
+	store     storage.FileStore
 }
 
-func NewImporterHandlers(shipments *usecase.ShipmentUsecase, uploadDir string) *ImporterHandlers {
-	return &ImporterHandlers{shipments: shipments, uploadDir: uploadDir}
+func NewImporterHandlers(shipments *usecase.ShipmentUsecase, store storage.FileStore) *ImporterHandlers {
+	return &ImporterHandlers{shipments: shipments, store: store}
 }
 
 func (h *ImporterHandlers) RegisterRoutes(v1 *gin.RouterGroup, jwtSecret string) {
@@ -145,18 +145,15 @@ func (h *ImporterHandlers) downloadDocument(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	path := filepath.Join(h.uploadDir, doc.StorageKey)
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+	file, err := h.store.Open(c.Request.Context(), doc.StorageKey)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
 		return
 	}
+	defer file.Close()
 	c.Header("Content-Type", doc.ContentType)
 	c.Header("Content-Disposition", `inline; filename="`+sanitizeFilename(doc.OriginalFileName)+`"`)
-	c.File(path)
+	_, _ = io.Copy(c.Writer, file)
 }
 
 func (h *ImporterHandlers) downloadSellerDocument(c *gin.Context) {
@@ -165,18 +162,15 @@ func (h *ImporterHandlers) downloadSellerDocument(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	path := filepath.Join(h.uploadDir, doc.StorageKey)
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+	file, err := h.store.Open(c.Request.Context(), doc.StorageKey)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
 		return
 	}
+	defer file.Close()
 	c.Header("Content-Type", doc.ContentType)
 	c.Header("Content-Disposition", `inline; filename="`+sanitizeFilename(doc.OriginalFileName)+`"`)
-	c.File(path)
+	_, _ = io.Copy(c.Writer, file)
 }
 
 func (h *ImporterHandlers) saveShipmentDocs(c *gin.Context, shipmentID string) ([]usecase.UploadShipmentDocumentInput, error) {
@@ -206,30 +200,16 @@ func (h *ImporterHandlers) saveShipmentDocs(c *gin.Context, shipmentID string) (
 				return nil, fmt.Errorf("open upload: %w", err)
 			}
 
-			storageKey := filepath.Join("shipments", shipmentID, uuid.NewString()+"_"+sanitizeFilename(fh.Filename))
-			dstPath := filepath.Join(h.uploadDir, storageKey)
-			if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
-				_ = src.Close()
-				return nil, fmt.Errorf("mkdir uploads: %w", err)
-			}
-			dst, err := os.Create(dstPath)
-			if err != nil {
-				_ = src.Close()
-				return nil, fmt.Errorf("create upload: %w", err)
-			}
+			storageKey := path.Join("shipments", shipmentID, uuid.NewString()+"_"+sanitizeFilename(fh.Filename))
 
 			hasher := sha256.New()
-			n, copyErr := io.Copy(io.MultiWriter(dst, hasher), src)
+			n, copyErr := h.store.Save(c.Request.Context(), storageKey, firstNonEmpty(fh.Header.Get("Content-Type"), "application/octet-stream"), io.TeeReader(src, hasher))
 			closeSrcErr := src.Close()
-			closeDstErr := dst.Close()
 			if copyErr != nil {
 				return nil, fmt.Errorf("save upload: %w", copyErr)
 			}
 			if closeSrcErr != nil {
 				return nil, fmt.Errorf("close upload: %w", closeSrcErr)
-			}
-			if closeDstErr != nil {
-				return nil, fmt.Errorf("close upload: %w", closeDstErr)
 			}
 
 			out = append(out, usecase.UploadShipmentDocumentInput{

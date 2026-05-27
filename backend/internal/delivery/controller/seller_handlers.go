@@ -6,25 +6,25 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
+	"path"
 	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
+	"github.com/abenezer54/ethio-chain-logistics/backend/internal/storage"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/usecase"
 	"github.com/gin-gonic/gin"
 )
 
 type SellerHandlers struct {
 	seller    *usecase.SellerUsecase
-	uploadDir string
+	store     storage.FileStore
 }
 
-func NewSellerHandlers(seller *usecase.SellerUsecase, uploadDir string) *SellerHandlers {
-	return &SellerHandlers{seller: seller, uploadDir: uploadDir}
+func NewSellerHandlers(seller *usecase.SellerUsecase, store storage.FileStore) *SellerHandlers {
+	return &SellerHandlers{seller: seller, store: store}
 }
 
 func (h *SellerHandlers) RegisterRoutes(v1 *gin.RouterGroup, jwtSecret string) {
@@ -84,18 +84,15 @@ func (h *SellerHandlers) downloadSellerDocument(c *gin.Context) {
 	docID := c.Param("docID")
 	// Try seller-specific documents first
 	if d, err := h.seller.GetSellerDocument(c.Request.Context(), docID); err == nil {
-		path := filepath.Join(h.uploadDir, d.StorageKey)
-		if _, err := os.Stat(path); err != nil {
-			if os.IsNotExist(err) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		file, err := h.store.Open(c.Request.Context(), d.StorageKey)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
 			return
 		}
+		defer file.Close()
 		c.Header("Content-Type", d.ContentType)
 		c.Header("Content-Disposition", `inline; filename="`+sanitizeFilename(d.OriginalFileName)+`"`)
-		c.File(path)
+		_, _ = io.Copy(c.Writer, file)
 		return
 	}
 
@@ -105,18 +102,15 @@ func (h *SellerHandlers) downloadSellerDocument(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	path := filepath.Join(h.uploadDir, sd.StorageKey)
-	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+	file, err := h.store.Open(c.Request.Context(), sd.StorageKey)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
 		return
 	}
+	defer file.Close()
 	c.Header("Content-Type", sd.ContentType)
 	c.Header("Content-Disposition", `inline; filename="`+sanitizeFilename(sd.OriginalFileName)+`"`)
-	c.File(path)
+	_, _ = io.Copy(c.Writer, file)
 }
 
 func (h *SellerHandlers) verifyShipment(c *gin.Context) {
@@ -210,30 +204,16 @@ func (h *SellerHandlers) saveSellerDocs(c *gin.Context, shipmentID string) ([]do
 				return nil, fmt.Errorf("open upload: %w", err)
 			}
 
-			storageKey := filepath.Join("seller_documents", shipmentID, uuid.NewString()+"_"+sanitizeFilename(fh.Filename))
-			dstPath := filepath.Join(h.uploadDir, storageKey)
-			if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
-				_ = src.Close()
-				return nil, fmt.Errorf("mkdir uploads: %w", err)
-			}
-			dst, err := os.Create(dstPath)
-			if err != nil {
-				_ = src.Close()
-				return nil, fmt.Errorf("create upload: %w", err)
-			}
+			storageKey := path.Join("seller_documents", shipmentID, uuid.NewString()+"_"+sanitizeFilename(fh.Filename))
 
 			hasher := sha256.New()
-			n, copyErr := io.Copy(io.MultiWriter(dst, hasher), src)
+			n, copyErr := h.store.Save(c.Request.Context(), storageKey, firstNonEmpty(fh.Header.Get("Content-Type"), "application/octet-stream"), io.TeeReader(src, hasher))
 			closeSrcErr := src.Close()
-			closeDstErr := dst.Close()
 			if copyErr != nil {
 				return nil, fmt.Errorf("save upload: %w", copyErr)
 			}
 			if closeSrcErr != nil {
 				return nil, fmt.Errorf("close upload: %w", closeSrcErr)
-			}
-			if closeDstErr != nil {
-				return nil, fmt.Errorf("close upload: %w", closeDstErr)
 			}
 
 			docType := strings.ToUpper(field)

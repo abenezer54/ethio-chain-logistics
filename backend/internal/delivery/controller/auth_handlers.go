@@ -3,13 +3,14 @@ package controller
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
+	"github.com/abenezer54/ethio-chain-logistics/backend/internal/storage"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/usecase"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -18,11 +19,11 @@ import (
 
 type AuthHandlers struct {
 	auth      *usecase.AuthUsecase
-	uploadDir string
+	store     storage.FileStore
 }
 
-func NewAuthHandlers(auth *usecase.AuthUsecase, uploadDir string) *AuthHandlers {
-	return &AuthHandlers{auth: auth, uploadDir: uploadDir}
+func NewAuthHandlers(auth *usecase.AuthUsecase, store storage.FileStore) *AuthHandlers {
+	return &AuthHandlers{auth: auth, store: store}
 }
 
 func (h *AuthHandlers) RegisterRoutes(v1 *gin.RouterGroup) {
@@ -131,23 +132,10 @@ func (h *AuthHandlers) saveDocs(c *gin.Context, requiredDocTypes []string) ([]do
 		}
 		defer src.Close()
 
-		storageKey := filepath.Join("kyc", uuid.NewString()+"_"+sanitizeFilename(fh.Filename))
-		dstPath := filepath.Join(h.uploadDir, storageKey)
-		if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
-			return nil, fmt.Errorf("mkdir uploads: %w", err)
-		}
-
-		dst, err := os.Create(dstPath)
+		storageKey := path.Join("kyc", uuid.NewString()+"_"+sanitizeFilename(fh.Filename))
+		n, err := h.store.Save(c.Request.Context(), storageKey, firstNonEmpty(fh.Header.Get("Content-Type"), "application/octet-stream"), src)
 		if err != nil {
-			return nil, fmt.Errorf("create upload: %w", err)
-		}
-		n, copyErr := io.Copy(dst, src)
-		closeErr := dst.Close()
-		if copyErr != nil {
-			return nil, fmt.Errorf("save upload: %w", copyErr)
-		}
-		if closeErr != nil {
-			return nil, fmt.Errorf("close upload: %w", closeErr)
+			return nil, err
 		}
 
 		out = append(out, domain.KYCDocument{
