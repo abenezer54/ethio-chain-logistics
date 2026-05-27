@@ -19,7 +19,11 @@ Clean Architecture layout:
 Set `DATABASE_URL`, or set `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, and optionally `POSTGRES_HOST` (default `localhost`), `POSTGRES_PORT` (default `5432`).
 
 Optional: `API_PORT` (default `8080`), `GIN_MODE` (`debug` or `release`), `JWT_SECRET`,
-`UPLOAD_DIR`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`.
+`UPLOAD_DIR`, `STORAGE_PROVIDER`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+`SUPABASE_STORAGE_BUCKET`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`.
+
+Storage defaults to local disk for development. Set `STORAGE_PROVIDER=supabase` to store file
+uploads in Supabase Storage instead of the backend filesystem.
 
 ## Run
 
@@ -95,7 +99,8 @@ Document upload expects `multipart/form-data`. Supported file fields:
 - `letter_of_credit`
 - `supplemental`
 
-The API stores uploads under `UPLOAD_DIR`, computes a SHA-256 hash for each document, records
+The API stores uploads under `UPLOAD_DIR` when local storage is enabled, or in Supabase Storage
+when `STORAGE_PROVIDER=supabase` is set. It computes a SHA-256 hash for each document, records
 document verification status as `PENDING`, and appends shipment audit events. Once both Bill of
 Lading and Commercial Invoice are present, the shipment moves from `INITIATED` to
 `DOCS_UPLOADED`.

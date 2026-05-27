@@ -4,6 +4,8 @@ Ethio Chain Logistics is a multi-service project that will include backend APIs,
 
 This README is the main entry point for setting up and running the project locally as it grows.
 
+For the free demo deployment path, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ## Repository structure
 
 - `backend/`: Go API (Gin, Clean Architecture) — see [backend/README.md](backend/README.md)
