@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Network } from "lucide-react";
+import { LanguageToggle } from "@/localization/LanguageToggle";
 
 type AuthShellProps = {
   children: React.ReactNode;
@@ -34,7 +35,12 @@ export function AuthShell({
                 Ethio-Chain Logistics
               </span>
             </Link>
-            <span className="hidden h-6 w-px bg-ec-border sm:block" aria-hidden />
+
+            <span
+              className="hidden h-6 w-px bg-ec-border sm:block"
+              aria-hidden
+            />
+
             <Link
               href="/"
               className="hidden text-sm font-semibold text-ec-text-secondary transition-colors hover:text-ec-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent rounded-md sm:inline"
@@ -42,6 +48,7 @@ export function AuthShell({
               Home
             </Link>
           </div>
+          <LanguageToggle />
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, Network, X } from "lucide-react";
 import { AuthNavLinks } from "@/components/layout/AuthNavLinks";
+import { LanguageToggle } from "@/localization/LanguageToggle";
 import { navLinks } from "./data";
 import { SectionContainer } from "./Section";
 
@@ -53,7 +54,10 @@ export function LandingNav() {
           </div>
         </Link>
 
-        <nav className="hidden items-center gap-1 md:flex lg:gap-2" aria-label="Main">
+        <nav
+          className="hidden items-center gap-1 md:flex lg:gap-2"
+          aria-label="Main"
+        >
           {navLinks.map((l) => (
             <a key={l.href} href={l.href} className={linkClass}>
               {l.label}
@@ -63,6 +67,7 @@ export function LandingNav() {
 
         <div className="flex items-center gap-2 sm:gap-3">
           <AuthNavLinks className="hidden sm:inline-flex" />
+          <LanguageToggle tone="dark" className="hidden sm:inline-flex" />
           <Link
             href="/login"
             className="hidden rounded-lg px-3 py-2 text-sm font-semibold text-white/90 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent sm:inline"
@@ -98,7 +103,10 @@ export function LandingNav() {
         >
           <nav className="flex flex-col gap-1" aria-label="Mobile">
             <div className="border-b border-white/10 px-4 pb-3 pt-1">
-              <AuthNavLinks className="w-full justify-center" />
+              <div className="flex items-center justify-center gap-2">
+                <AuthNavLinks className="justify-center" />
+                <LanguageToggle tone="dark" />
+              </div>
             </div>
             {navLinks.map((l) => (
               <a

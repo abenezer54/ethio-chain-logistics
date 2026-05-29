@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Network } from "lucide-react";
+import { LanguageToggle } from "@/localization/LanguageToggle";
 
 type PortalHeaderProps = {
   title: string;
@@ -35,10 +36,11 @@ export function PortalHeader({ title, subtitle, actions }: PortalHeaderProps) {
               </p>
             ) : null}
           </div>
+        </div>    
+        <div className="flex shrink-0 items-center gap-2">
+          <LanguageToggle />
+          {actions}
         </div>
-        {actions ? (
-          <div className="flex shrink-0 items-center gap-2">{actions}</div>
-        ) : null}
       </div>
     </header>
   );

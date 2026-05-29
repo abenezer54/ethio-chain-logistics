@@ -13,6 +13,7 @@ import {
   History,
 } from "lucide-react";
 import { AuthNavLinks } from "@/components/layout/AuthNavLinks";
+import { LanguageToggle } from "@/localization/LanguageToggle";
 
 const STORAGE_KEY = "ec_last_role";
 
@@ -178,6 +179,7 @@ export function RoleSelectionContent() {
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">
             <AuthNavLinks tone="lightNav" />
+            <LanguageToggle />
             <Link
               href="/login"
               className="text-sm font-semibold text-ec-accent hover:text-ec-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent rounded-md"
