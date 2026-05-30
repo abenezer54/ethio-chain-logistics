@@ -2,21 +2,28 @@ package controller
 
 import (
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
-// CORS enables a minimal dev-friendly CORS policy.
-// It allows localhost frontends (e.g. :3000) to call the API from the browser.
+// CORS enables a dev-friendly CORS policy with optional production origins.
+// Set ALLOWED_ORIGINS to a comma-separated list of exact origins for deployed frontends.
 func CORS() gin.HandlerFunc {
 	allowed := map[string]struct{}{
-		"http://localhost:3000":   {},
-		"http://127.0.0.1:3000":   {},
-		"http://localhost:3001":   {},
-		"http://127.0.0.1:3001":   {},
-		"http://localhost:5173":   {}, // common Vite port
-		"http://127.0.0.1:5173":   {},
+		"http://localhost:3000": {},
+		"http://127.0.0.1:3000": {},
+		"http://localhost:3001": {},
+		"http://127.0.0.1:3001": {},
+		"http://localhost:5173": {}, // common Vite port
+		"http://127.0.0.1:5173": {},
+	}
+	for _, origin := range strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",") {
+		origin = strings.TrimSpace(origin)
+		if origin != "" {
+			allowed[origin] = struct{}{}
+		}
 	}
 
 	return func(c *gin.Context) {

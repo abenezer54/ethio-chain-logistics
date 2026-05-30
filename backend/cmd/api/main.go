@@ -22,6 +22,7 @@ import (
 )
 
 func main() {
+	log.Println("API starting up...")
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config: %v", err)
@@ -34,6 +35,7 @@ func main() {
 		log.Fatalf("database: %v", err)
 	}
 	defer pool.Close()
+	log.Println("database connection successful")
 
 	healthUC := usecase.NewHealthUsecase(pool)
 
@@ -52,7 +54,7 @@ func main() {
 	authUC := usecase.NewAuthUsecase(userRepo, docRepo, emailSender, cfg.JWTSecret)
 	shipmentUC := usecase.NewShipmentUsecase(shipmentRepo)
 	authHandlers := controller.NewAuthHandlers(authUC, fileStore)
-	adminHandlers := controller.NewAdminHandlers(authUC, cfg.UploadDir)
+	adminHandlers := controller.NewAdminHandlers(authUC, fileStore)
 	importerHandlers := controller.NewImporterHandlers(shipmentUC, fileStore)
 	sellerRepo := repository.NewSellerRepo(pool)
 	sellerUC := usecase.NewSellerUsecase(sellerRepo)

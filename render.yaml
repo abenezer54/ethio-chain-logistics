@@ -1,0 +1,42 @@
+# Render manifest for deploying services. Update secret values in Render UI
+# before deploying. This manifest targets the `deploy` branch and the backend
+# service located in the `backend` directory which is built from a Dockerfile.
+services:
+  - type: web
+    name: ethio-chain-backend
+    env: docker
+    branch: deploy
+    rootDir: backend
+    dockerfilePath: backend/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        value: ""
+        secure: true
+      - key: STORAGE_PROVIDER
+        value: "supabase"
+        secure: false
+      - key: SUPABASE_URL
+        value: ""
+        secure: true
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        value: ""
+        secure: true
+      - key: SUPABASE_STORAGE_BUCKET
+        value: "ethio-chain-uploads"
+        secure: false
+      - key: JWT_SECRET
+        value: ""
+        secure: true
+      - key: ADMIN_EMAIL
+        value: "admin@local.dev"
+        secure: false
+      - key: ADMIN_PASSWORD
+        value: ""
+        secure: true
+      - key: GIN_MODE
+        value: "release"
+        secure: false
+      - key: BLOCKCHAIN_ENABLED
+        value: "false"
+        secure: false

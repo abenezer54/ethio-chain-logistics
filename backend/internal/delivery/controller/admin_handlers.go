@@ -2,23 +2,25 @@ package controller
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"os"
-	"path/filepath"
+	"strings"
 	"strconv"
 
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
+	"github.com/abenezer54/ethio-chain-logistics/backend/internal/storage"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/usecase"
 	"github.com/gin-gonic/gin"
 )
 
 type AdminHandlers struct {
-	auth      *usecase.AuthUsecase
-	uploadDir string
+	auth  *usecase.AuthUsecase
+	store storage.FileStore
 }
 
-func NewAdminHandlers(auth *usecase.AuthUsecase, uploadDir string) *AdminHandlers {
-	return &AdminHandlers{auth: auth, uploadDir: uploadDir}
+func NewAdminHandlers(auth *usecase.AuthUsecase, store storage.FileStore) *AdminHandlers {
+	return &AdminHandlers{auth: auth, store: store}
 }
 
 func (h *AdminHandlers) RegisterRoutes(v1 *gin.RouterGroup, jwtSecret string) {
@@ -66,18 +68,20 @@ func (h *AdminHandlers) downloadDoc(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	path := filepath.Join(h.uploadDir, doc.StorageKey)
-	if _, err := os.Stat(path); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+	file, err := h.store.Open(c.Request.Context(), doc.StorageKey)
+	if err != nil {
+		msg := strings.ToLower(err.Error())
+		if errors.Is(err, os.ErrNotExist) || strings.Contains(msg, "not found") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
+	defer file.Close()
 	c.Header("Content-Type", doc.ContentType)
 	c.Header("Content-Disposition", `inline; filename="`+sanitizeFilename(doc.OriginalFileName)+`"`)
-	c.File(path)
+	_, _ = io.Copy(c.Writer, file)
 }
 
 func (h *AdminHandlers) approveUser(c *gin.Context) {
