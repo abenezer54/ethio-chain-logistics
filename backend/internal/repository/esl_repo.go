@@ -30,7 +30,7 @@ SELECT
   status, anchor_status, COALESCE(blockchain_tx_hash, ''),
   created_at, updated_at
 FROM shipments s
-WHERE s.status = 'VERIFIED'
+WHERE s.status IN ('VERIFIED', 'EXPORT_DOCS_UPLOADED')
   AND NOT EXISTS (
     SELECT 1 FROM shipment_allocations a WHERE a.shipment_id = s.id
   )
@@ -121,7 +121,7 @@ FOR UPDATE
 		}
 		return domain.ShipmentAllocationDetail{}, fmt.Errorf("lock shipment for allocation: %w", err)
 	}
-	if shipment.Status != domain.ShipmentStatusVerified {
+	if shipment.Status != domain.ShipmentStatusVerified && shipment.Status != domain.ShipmentStatusExportDocsUploaded {
 		return domain.ShipmentAllocationDetail{}, fmt.Errorf("%w: shipment must be VERIFIED before allocation", domain.ErrValidation)
 	}
 
