@@ -624,6 +624,7 @@ function DocumentUploadForm({
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const form = e.currentTarget;
     const fd = new FormData();
     if (bill) fd.set("bill_of_lading", bill);
     if (invoice) fd.set("commercial_invoice", invoice);
@@ -632,7 +633,7 @@ function DocumentUploadForm({
     setBill(null);
     setInvoice(null);
     setLetter(null);
-    e.currentTarget.reset();
+    form.reset();
   }
 
   return (
