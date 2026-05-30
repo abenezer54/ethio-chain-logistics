@@ -696,14 +696,23 @@ function DocumentUploadForm({
 
 function ProgressSteps({ status }: { status: ShipmentStatus }) {
   const activeIndex = STATUS_STEPS.indexOf(status);
-  
+
   // Define major milestone groups
   const MILESTONES = [
-    { label: "Initiated", group: ["INITIATED", "DOCS_UPLOADED", "PENDING_VERIFICATION", "REJECTED"] },
-    { label: "Verified", group: ["VERIFIED", "APPROVED", "EXPORT_DOCS_UPLOADED"] },
+    {
+      label: "Initiated",
+      group: ["INITIATED", "DOCS_UPLOADED", "PENDING_VERIFICATION", "REJECTED"],
+    },
+    {
+      label: "Verified",
+      group: ["VERIFIED", "APPROVED", "EXPORT_DOCS_UPLOADED"],
+    },
     { label: "Allocated", group: ["ALLOCATED"] },
     { label: "In Transit", group: ["IN_TRANSIT", "ARRIVED"] },
-    { label: "Cleared", group: ["AT_CUSTOMS", "HELD_FOR_INSPECTION", "CLEARED"] }
+    {
+      label: "Cleared",
+      group: ["AT_CUSTOMS", "HELD_FOR_INSPECTION", "CLEARED"],
+    },
   ];
 
   // Find which milestone group the current status belongs to
@@ -720,39 +729,60 @@ function ProgressSteps({ status }: { status: ShipmentStatus }) {
       <div className="relative flex items-center justify-between">
         {/* Connecting Background Line */}
         <div className="absolute left-0 top-1/2 -z-10 h-1 w-full -translate-y-1/2 rounded-full bg-ec-surface-raised" />
-        
+
         {/* Active Progress Line */}
-        <div 
-          className="absolute left-0 top-1/2 -z-10 h-1 -translate-y-1/2 rounded-full bg-ec-accent transition-all duration-1000 ease-out" 
-          style={{ width: `${(currentMilestoneIndex / (MILESTONES.length - 1)) * 100}%` }}
+        <div
+          className="absolute left-0 top-1/2 -z-10 h-1 -translate-y-1/2 rounded-full bg-ec-accent transition-all duration-1000 ease-out"
+          style={{
+            width: `${(currentMilestoneIndex / (MILESTONES.length - 1)) * 100}%`,
+          }}
         />
 
         {MILESTONES.map((milestone, index) => {
           const isCompleted = index < currentMilestoneIndex;
           const isActive = index === currentMilestoneIndex;
           const isPending = index > currentMilestoneIndex;
-          
+
           return (
-            <div key={milestone.label} className="relative flex flex-col items-center">
-              <div 
+            <div
+              key={milestone.label}
+              className="relative flex flex-col items-center"
+            >
+              <div
                 className={`flex h-8 w-8 items-center justify-center rounded-full border-4 border-ec-card transition-all duration-700 ${
-                  isCompleted ? "bg-ec-accent text-white" : 
-                  isActive ? "bg-ec-card ring-2 ring-ec-accent shadow-[0_0_15px_rgba(37,99,235,0.5)]" : 
-                  "bg-ec-surface-raised text-ec-text-muted"
+                  isCompleted
+                    ? "bg-ec-accent text-white"
+                    : isActive
+                      ? "bg-ec-card ring-2 ring-ec-accent shadow-[0_0_15px_rgba(37,99,235,0.5)]"
+                      : "bg-ec-surface-raised text-ec-text-muted"
                 }`}
               >
-                {isActive && <div className="h-2.5 w-2.5 rounded-full bg-ec-accent animate-pulse" />}
+                {isActive && (
+                  <div className="h-2.5 w-2.5 rounded-full bg-ec-accent animate-pulse" />
+                )}
                 {isCompleted && (
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={3}
+                      d="M5 13l4 4L19 7"
+                    />
                   </svg>
                 )}
               </div>
-              <span 
+              <span
                 className={`absolute top-10 whitespace-nowrap text-xs font-bold transition-colors ${
-                  isActive ? "text-ec-accent" : 
-                  isCompleted ? "text-ec-text" : 
-                  "text-ec-text-muted"
+                  isActive
+                    ? "text-ec-accent"
+                    : isCompleted
+                      ? "text-ec-text"
+                      : "text-ec-text-muted"
                 }`}
               >
                 {milestone.label}
@@ -763,7 +793,8 @@ function ProgressSteps({ status }: { status: ShipmentStatus }) {
       </div>
       <div className="mt-12 text-center">
         <span className="inline-flex items-center gap-2 rounded-full bg-ec-surface-raised px-4 py-1.5 text-xs font-semibold text-ec-text-secondary border border-ec-border shadow-sm">
-          Detailed Status: <span className="text-ec-accent">{STATUS_LABEL[status]}</span>
+          Detailed Status:{" "}
+          <span className="text-ec-accent">{STATUS_LABEL[status]}</span>
         </span>
       </div>
     </div>
@@ -811,11 +842,18 @@ function DocumentsList({
           className="rounded-lg border border-ec-border bg-ec-card p-4"
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-semibold text-ec-text">
-                {DOC_LABEL[doc.doc_type as keyof typeof DOC_LABEL] ||
-                  doc.doc_type}
-              </p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-semibold text-ec-text">
+                  {DOC_LABEL[doc.doc_type as keyof typeof DOC_LABEL] ||
+                    doc.doc_type}
+                </p>
+                {doc.verification_status === "REJECTED" && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-500/10 text-red-600 text-[10px] font-semibold rounded border border-red-200">
+                    Rejected
+                  </span>
+                )}
+              </div>
               <p className="mt-1 truncate text-sm text-ec-text-secondary">
                 {doc.original_file_name}
               </p>

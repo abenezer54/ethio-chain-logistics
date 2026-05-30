@@ -15,6 +15,7 @@ type Doc = {
   size_bytes?: number;
   sha256_hash?: string;
   uploaded_at?: string;
+  verification_status?: string;
 };
 
 type ShipmentSummary = {
