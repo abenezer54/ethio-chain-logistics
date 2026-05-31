@@ -10,25 +10,31 @@ import (
 
 // Config holds runtime configuration loaded from the environment.
 type Config struct {
-	Addr                  string
-	DatabaseURL           string
-	GinMode               string
-	JWTSecret             string
-	UploadDir             string
-	StorageProvider       string
-	SupabaseURL           string
+	Addr                   string
+	DatabaseURL            string
+	GinMode                string
+	JWTSecret              string
+	UploadDir              string
+	StorageProvider        string
+	SupabaseURL            string
 	SupabaseServiceRoleKey string
 	SupabaseStorageBucket  string
-	FromEmail             string
-	BlockchainEnabled     bool
-	BlockchainNetwork     string
-	BlockchainRPCURL      string
-	BlockchainChainID     string
-	BlockchainPrivateKey  string
-	AnchorContractAddress string
-	BlockExplorerTxBase   string
-	AnchorWorkerInterval  time.Duration
-	AnchorConfirmTimeout  time.Duration
+	FromEmail              string
+	EmailProvider          string
+	FrontendBaseURL        string
+	BrevoAPIKey            string
+	BrevoSenderEmail       string
+	BrevoSenderName        string
+	BrevoOTPTemplateID     int
+	BlockchainEnabled      bool
+	BlockchainNetwork      string
+	BlockchainRPCURL       string
+	BlockchainChainID      string
+	BlockchainPrivateKey   string
+	AnchorContractAddress  string
+	BlockExplorerTxBase    string
+	AnchorWorkerInterval   time.Duration
+	AnchorConfirmTimeout   time.Duration
 }
 
 // Load reads configuration from environment variables.
@@ -38,25 +44,31 @@ func Load() (Config, error) {
 		port = "8080"
 	}
 	cfg := Config{
-		Addr:                  ":" + port,
-		DatabaseURL:           os.Getenv("DATABASE_URL"),
-		GinMode:               os.Getenv("GIN_MODE"),
-		JWTSecret:             os.Getenv("JWT_SECRET"),
-		UploadDir:             os.Getenv("UPLOAD_DIR"),
-		StorageProvider:       stringEnv("STORAGE_PROVIDER", "local"),
-		SupabaseURL:           strings.TrimSpace(os.Getenv("SUPABASE_URL")),
+		Addr:                   ":" + port,
+		DatabaseURL:            os.Getenv("DATABASE_URL"),
+		GinMode:                os.Getenv("GIN_MODE"),
+		JWTSecret:              os.Getenv("JWT_SECRET"),
+		UploadDir:              os.Getenv("UPLOAD_DIR"),
+		StorageProvider:        stringEnv("STORAGE_PROVIDER", "local"),
+		SupabaseURL:            strings.TrimSpace(os.Getenv("SUPABASE_URL")),
 		SupabaseServiceRoleKey: strings.TrimSpace(os.Getenv("SUPABASE_SERVICE_ROLE_KEY")),
 		SupabaseStorageBucket:  stringEnv("SUPABASE_STORAGE_BUCKET", "ethio-chain-uploads"),
-		FromEmail:             os.Getenv("FROM_EMAIL"),
-		BlockchainEnabled:     boolEnv("BLOCKCHAIN_ENABLED", false),
-		BlockchainNetwork:     stringEnv("BLOCKCHAIN_NETWORK", "hardhat-local"),
-		BlockchainRPCURL:      stringEnv("BLOCKCHAIN_RPC_URL", "http://127.0.0.1:8545"),
-		BlockchainChainID:     stringEnv("BLOCKCHAIN_CHAIN_ID", "31337"),
-		BlockchainPrivateKey:  os.Getenv("BLOCKCHAIN_PRIVATE_KEY"),
-		AnchorContractAddress: os.Getenv("ANCHOR_CONTRACT_ADDRESS"),
-		BlockExplorerTxBase:   os.Getenv("BLOCK_EXPLORER_TX_BASE"),
-		AnchorWorkerInterval:  durationSecondsEnv("ANCHOR_WORKER_INTERVAL_SECONDS", 5),
-		AnchorConfirmTimeout:  durationSecondsEnv("ANCHOR_CONFIRM_TIMEOUT_SECONDS", 60),
+		FromEmail:              os.Getenv("FROM_EMAIL"),
+		EmailProvider:          strings.ToLower(stringEnv("EMAIL_PROVIDER", "")),
+		FrontendBaseURL:        strings.TrimRight(stringEnv("FRONTEND_BASE_URL", "http://localhost:3000"), "/"),
+		BrevoAPIKey:            strings.TrimSpace(os.Getenv("BREVO_API_KEY")),
+		BrevoSenderEmail:       strings.TrimSpace(os.Getenv("BREVO_SENDER_EMAIL")),
+		BrevoSenderName:        stringEnv("BREVO_SENDER_NAME", "Ethio Chain Logistics"),
+		BrevoOTPTemplateID:     intEnv("BREVO_OTP_TEMPLATE_ID", 0),
+		BlockchainEnabled:      boolEnv("BLOCKCHAIN_ENABLED", false),
+		BlockchainNetwork:      stringEnv("BLOCKCHAIN_NETWORK", "hardhat-local"),
+		BlockchainRPCURL:       stringEnv("BLOCKCHAIN_RPC_URL", "http://127.0.0.1:8545"),
+		BlockchainChainID:      stringEnv("BLOCKCHAIN_CHAIN_ID", "31337"),
+		BlockchainPrivateKey:   os.Getenv("BLOCKCHAIN_PRIVATE_KEY"),
+		AnchorContractAddress:  os.Getenv("ANCHOR_CONTRACT_ADDRESS"),
+		BlockExplorerTxBase:    os.Getenv("BLOCK_EXPLORER_TX_BASE"),
+		AnchorWorkerInterval:   durationSecondsEnv("ANCHOR_WORKER_INTERVAL_SECONDS", 5),
+		AnchorConfirmTimeout:   durationSecondsEnv("ANCHOR_CONFIRM_TIMEOUT_SECONDS", 60),
 	}
 	if cfg.DatabaseURL == "" {
 		cfg.DatabaseURL = databaseURLFromParts()
@@ -75,6 +87,21 @@ func Load() (Config, error) {
 	}
 	if cfg.FromEmail == "" {
 		cfg.FromEmail = "no-reply@local.dev"
+	}
+	if cfg.EmailProvider == "" && cfg.BrevoAPIKey != "" {
+		cfg.EmailProvider = "brevo"
+	}
+	if cfg.EmailProvider == "" {
+		cfg.EmailProvider = "noop"
+	}
+	if cfg.EmailProvider != "noop" && cfg.EmailProvider != "brevo" {
+		return Config{}, fmt.Errorf("EMAIL_PROVIDER must be noop or brevo")
+	}
+	if cfg.EmailProvider == "brevo" && cfg.BrevoAPIKey == "" {
+		return Config{}, fmt.Errorf("BREVO_API_KEY is required when EMAIL_PROVIDER=brevo")
+	}
+	if cfg.EmailProvider == "brevo" && cfg.BrevoSenderEmail == "" {
+		return Config{}, fmt.Errorf("BREVO_SENDER_EMAIL is required when BREVO_API_KEY is set")
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL or POSTGRES_* variables must be set")
@@ -152,6 +179,18 @@ func durationSecondsEnv(key string, fallback int) time.Duration {
 		return time.Duration(fallback) * time.Second
 	}
 	return time.Duration(n) * time.Second
+}
+
+func intEnv(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return n
 }
 
 func validPositiveIntString(value string) bool {

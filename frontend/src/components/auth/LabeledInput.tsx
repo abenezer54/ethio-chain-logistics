@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type HTMLInputTypeAttribute } from "react";
+import { useId, type HTMLInputTypeAttribute, type InputHTMLAttributes } from "react";
 
 type LabeledInputProps = {
   label: string;
@@ -9,6 +9,7 @@ type LabeledInputProps = {
   onChange: (value: string) => void;
   onBlur?: () => void;
   autoComplete?: string;
+  inputMode?: InputHTMLAttributes<HTMLInputElement>["inputMode"];
   placeholder?: string;
   error?: string;
   success?: boolean;
@@ -22,6 +23,7 @@ export function LabeledInput({
   onChange,
   onBlur,
   autoComplete,
+  inputMode,
   placeholder,
   error,
   success,
@@ -53,6 +55,7 @@ export function LabeledInput({
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
         autoComplete={autoComplete}
+        inputMode={inputMode}
         placeholder={placeholder}
         disabled={disabled}
         aria-invalid={Boolean(error)}

@@ -18,8 +18,8 @@ import (
 )
 
 type AuthHandlers struct {
-	auth      *usecase.AuthUsecase
-	store     storage.FileStore
+	auth  *usecase.AuthUsecase
+	store storage.FileStore
 }
 
 func NewAuthHandlers(auth *usecase.AuthUsecase, store storage.FileStore) *AuthHandlers {
@@ -30,6 +30,11 @@ func (h *AuthHandlers) RegisterRoutes(v1 *gin.RouterGroup) {
 	g := v1.Group("/auth")
 	g.POST("/signup", h.signup)
 	g.POST("/login", h.login)
+	g.POST("/verify-email", h.verifyEmail)
+	g.POST("/resend-verification", h.resendVerification)
+	g.POST("/change-unverified-email", h.changeUnverifiedEmail)
+	g.POST("/password-reset/request", h.requestPasswordReset)
+	g.POST("/password-reset/confirm", h.confirmPasswordReset)
 }
 
 func (h *AuthHandlers) signup(c *gin.Context) {
@@ -115,6 +120,93 @@ func (h *AuthHandlers) login(c *gin.Context) {
 	})
 }
 
+func (h *AuthHandlers) verifyEmail(c *gin.Context) {
+	var body struct {
+		Email string `json:"email"`
+		Code  string `json:"code"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
+		return
+	}
+	u, err := h.auth.VerifyEmail(c.Request.Context(), body.Email, body.Code)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"id":                u.ID,
+		"email":             u.Email,
+		"role":              u.Role,
+		"status":            u.Status,
+		"email_verified_at": u.EmailVerifiedAt,
+	})
+}
+
+func (h *AuthHandlers) resendVerification(c *gin.Context) {
+	var body struct {
+		Email string `json:"email"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
+		return
+	}
+	if err := h.auth.ResendEmailVerification(c.Request.Context(), body.Email); err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (h *AuthHandlers) changeUnverifiedEmail(c *gin.Context) {
+	var body struct {
+		CurrentEmail string `json:"current_email"`
+		Password     string `json:"password"`
+		NewEmail     string `json:"new_email"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
+		return
+	}
+	if err := h.auth.ChangeUnverifiedEmail(c.Request.Context(), body.CurrentEmail, body.Password, body.NewEmail); err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (h *AuthHandlers) requestPasswordReset(c *gin.Context) {
+	var body struct {
+		Email string `json:"email"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
+		return
+	}
+	if err := h.auth.RequestPasswordReset(c.Request.Context(), body.Email); err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func (h *AuthHandlers) confirmPasswordReset(c *gin.Context) {
+	var body struct {
+		Email       string `json:"email"`
+		Code        string `json:"code"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
+		return
+	}
+	if err := h.auth.ResetPassword(c.Request.Context(), body.Email, body.Code, body.NewPassword); err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
 func (h *AuthHandlers) saveDocs(c *gin.Context, requiredDocTypes []string) ([]domain.KYCDocument, error) {
 	if err := c.Request.ParseMultipartForm(25 << 20); err != nil { // 25MB
 		return nil, fmt.Errorf("%w: invalid multipart form", domain.ErrValidation)
@@ -193,6 +285,8 @@ func writeError(c *gin.Context, err error) {
 		c.JSON(http.StatusConflict, gin.H{"error": "email already registered"})
 	case errors.Is(err, domain.ErrUnauthorized):
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+	case errors.Is(err, domain.ErrEmailUnverified):
+		c.JSON(http.StatusForbidden, gin.H{"error": "Please verify your email address before continuing."})
 	case errors.Is(err, domain.ErrForbidden):
 		c.JSON(http.StatusForbidden, gin.H{"error": "account pending approval"})
 	case errors.Is(err, domain.ErrNotFound):

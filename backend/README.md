@@ -22,6 +22,13 @@ Optional: `API_PORT` (default `8080`), `GIN_MODE` (`debug` or `release`), `JWT_S
 `UPLOAD_DIR`, `STORAGE_PROVIDER`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
 `SUPABASE_STORAGE_BUCKET`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`.
 
+Transactional email uses the noop logger by default. To send real emails through Brevo, set
+`EMAIL_PROVIDER=brevo`, `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, and optionally
+`BREVO_SENDER_NAME`. Set `FRONTEND_BASE_URL` to the public frontend URL so email verification
+screens point to the correct app. If you create a Brevo transactional template for OTP emails,
+set `BREVO_OTP_TEMPLATE_ID` to its template ID. The template receives params named `code`,
+`purpose`, `email`, and `minutes`.
+
 Storage defaults to local disk for development. Set `STORAGE_PROVIDER=supabase` to store file
 uploads in Supabase Storage instead of the backend filesystem.
 
