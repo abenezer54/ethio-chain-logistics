@@ -301,7 +301,7 @@ func (r *SellerRepo) ListAllShipments(ctx context.Context, sellerID string, limi
 	  status, anchor_status, COALESCE(blockchain_tx_hash, ''),
 	  created_at, updated_at
 	FROM shipments
-	WHERE seller_id = $1
+	WHERE seller_id = $1 AND status <> 'REJECTED'
 	ORDER BY updated_at DESC
 	LIMIT $2
 	`

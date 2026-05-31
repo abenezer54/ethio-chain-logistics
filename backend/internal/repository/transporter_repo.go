@@ -98,8 +98,12 @@ func (r *TransporterRepo) AddMilestone(ctx context.Context, req usecase.AddTrans
 	if err != nil {
 		return domain.TransporterShipment{}, err
 	}
+	events, err := (&ShipmentRepo{pool: r.pool}).listEvents(ctx, req.ShipmentID)
+	if err != nil {
+		return domain.TransporterShipment{}, err
+	}
 
-	nextStatus, action, message, err := milestoneTransition(item.Shipment.Status, item.Allocation.LegType, req.Milestone)
+	nextStatus, action, message, err := milestoneTransition(item.Shipment.Status, item.Allocation.LegType, req.Milestone, events)
 	if err != nil {
 		return domain.TransporterShipment{}, err
 	}
@@ -213,10 +217,11 @@ WHERE s.id = $2
 	return item, nil
 }
 
-func milestoneTransition(current domain.ShipmentStatus, legType string, milestone domain.TransportMilestone) (domain.ShipmentStatus, string, string, error) {
+func milestoneTransition(current domain.ShipmentStatus, legType string, milestone domain.TransportMilestone, events []domain.ShipmentEvent) (domain.ShipmentStatus, string, string, error) {
 	if current == domain.ShipmentStatusCleared {
 		return "", "", "", fmt.Errorf("%w: cleared shipments cannot be updated", domain.ErrValidation)
 	}
+	seaArrived := hasShipmentEventAction(events, "TRANSPORT_ARRIVED_DJIBOUTI_PORT")
 
 	switch milestone {
 	case domain.TransportMilestoneDepartedOrigin:
@@ -239,21 +244,36 @@ func milestoneTransition(current domain.ShipmentStatus, legType string, mileston
 		if legType != "INLAND" {
 			return "", "", "", fmt.Errorf("%w: land movement belongs to the inland truck leg", domain.ErrValidation)
 		}
-		if current != domain.ShipmentStatusInTransit && current != domain.ShipmentStatusAllocated {
+		if current != domain.ShipmentStatusInTransit {
 			return "", "", "", fmt.Errorf("%w: shipment must be in transit before land movement", domain.ErrValidation)
+		}
+		if !seaArrived {
+			return "", "", "", fmt.Errorf("%w: truck updates are allowed only after the ship arrives at Djibouti port", domain.ErrValidation)
 		}
 		return domain.ShipmentStatusInTransit, "TRANSPORT_IN_TRANSIT_BY_LAND", "Shipment is in transit by land.", nil
 	case domain.TransportMilestoneArrivedDryPort:
 		if legType != "INLAND" {
 			return "", "", "", fmt.Errorf("%w: dry port arrival belongs to the inland truck leg", domain.ErrValidation)
 		}
-		if current != domain.ShipmentStatusInTransit && current != domain.ShipmentStatusAllocated {
+		if current != domain.ShipmentStatusInTransit {
 			return "", "", "", fmt.Errorf("%w: shipment must be in transit before dry port arrival", domain.ErrValidation)
+		}
+		if !seaArrived {
+			return "", "", "", fmt.Errorf("%w: truck arrival is allowed only after the ship reaches Djibouti port", domain.ErrValidation)
 		}
 		return domain.ShipmentStatusArrived, "TRANSPORT_ARRIVED_DRY_PORT", "Shipment arrived at the dry port and is ready for clearance.", nil
 	default:
 		return "", "", "", fmt.Errorf("%w: invalid milestone", domain.ErrValidation)
 	}
+}
+
+func hasShipmentEventAction(events []domain.ShipmentEvent, action string) bool {
+	for _, event := range events {
+		if event.Action == action {
+			return true
+		}
+	}
+	return false
 }
 
 func scanTransporterShipment(row rowScanner) (domain.TransporterShipment, error) {

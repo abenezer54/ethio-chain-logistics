@@ -88,7 +88,7 @@ export default function SellerWorkspace() {
         setDocsUploaded(docsUploadedList);
         setTransit(inTransit);
 
-        // Use all shipments endpoint which includes rejected ones
+        // Use the all shipments endpoint, which filters rejected ones out on the backend.
         const combined = allList.sort(
           (a, b) =>
             new Date(b.created_at || 0).getTime() -
