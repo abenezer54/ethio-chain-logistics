@@ -10,6 +10,8 @@ frontend/.next/
 frontend/out/
 frontend/.env*.local
 frontend/*.log
+frontend/test-artifacts/
+frontend/coverage/
 
 # Backend (Go)
 backend/bin/
@@ -17,6 +19,7 @@ backend/uploads/
 backend/tmp/
 backend/*.exe
 backend/*.out
+backend/vendor/
 
 # Blockchain
 blockchain/node_modules/

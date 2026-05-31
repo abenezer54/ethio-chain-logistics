@@ -6,12 +6,11 @@ export default function DocumentUpload({
 }: {
   onUpload: (fd: FormData) => Promise<void>;
 }) {
-  const [file1, setFile1] = useState<File | null>(null);
   const [file2, setFile2] = useState<File | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file1 && !file2) return;
+    if (!file2) return;
 
     const fd = new FormData();
     if (file2) fd.append("CERTIFICATE_OF_ORIGIN", file2);
@@ -23,11 +22,15 @@ export default function DocumentUpload({
     <form onSubmit={submit} className="space-y-6">
       <div className="space-y-4">
         <div className="flex flex-col gap-2 p-4 border border-ec-border rounded-xl bg-white">
-          <label className="text-sm font-bold text-ec-text flex items-center gap-2">
+          <label
+            htmlFor="certificate-of-origin-upload"
+            className="text-sm font-bold text-ec-text flex items-center gap-2"
+          >
             <div className="w-2 h-2 rounded-full bg-action" />
             Packing List
           </label>
           <input
+            id="certificate-of-origin-upload"
             type="file"
             onChange={(e) => setFile2(e.target.files?.[0] || null)}
             className="block w-full text-xs text-ec-text-muted
@@ -48,7 +51,7 @@ export default function DocumentUpload({
       <button
         type="submit"
         className="ec-btn-primary w-full py-3 shadow-lg shadow-action/20"
-        disabled={!file1 && !file2}
+        disabled={!file2}
       >
         Upload Documents
       </button>

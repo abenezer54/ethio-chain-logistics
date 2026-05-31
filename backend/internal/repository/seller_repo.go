@@ -197,10 +197,33 @@ RETURNING id, created_at
 }
 
 func (r *SellerRepo) SetShipmentStatus(ctx context.Context, shipmentID, status string) error {
+	tx, err := r.pool.inner.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin set shipment status: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// When rejecting a shipment, mark all existing documents as rejected
+	if status == string(domain.ShipmentStatusRejected) {
+		const markDocsRejectedQ = `
+UPDATE shipment_documents
+SET verification_status = $2
+WHERE shipment_id = $1 AND verification_status != $2
+`
+		_, err := tx.Exec(ctx, markDocsRejectedQ, shipmentID, domain.DocumentVerificationRejected)
+		if err != nil {
+			return fmt.Errorf("mark documents as rejected: %w", err)
+		}
+	}
+
 	const q = `UPDATE shipments SET status = $2, updated_at = now() WHERE id = $1`
-	_, err := r.pool.inner.Exec(ctx, q, shipmentID, status)
+	_, err = tx.Exec(ctx, q, shipmentID, status)
 	if err != nil {
 		return fmt.Errorf("set shipment status: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit set shipment status: %w", err)
 	}
 	return nil
 }

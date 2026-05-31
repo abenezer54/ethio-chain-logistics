@@ -11,6 +11,7 @@ type Doc = {
   size_bytes?: number;
   sha256_hash?: string;
   uploaded_at?: string;
+  verification_status?: string;
 };
 
 import { ImageOff, FileText, File, Hash, Clock, HardDrive } from "lucide-react";
@@ -147,15 +148,24 @@ export default function DocumentViewer({
                 )}
 
                 <div className="min-w-0 pt-2 border-t border-ec-border/50">
-                  <div className="flex items-start justify-between">
-                    <span className="text-ec-text font-bold truncate block">
-                      {d.original_file_name}
-                    </span>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-ec-text font-bold truncate block">
+                          {d.original_file_name}
+                        </span>
+                        {d.verification_status === "REJECTED" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-500/10 text-red-600 text-[10px] font-semibold rounded border border-red-200">
+                            Rejected
+                          </span>
+                        )}
+                      </div>
+                    </div>
                     {url && (
                       <a
                         href={url}
                         download={d.original_file_name}
-                        className="rounded-md bg-ec-accent/10 px-2 py-1 text-[10px] font-bold text-ec-accent hover:bg-ec-accent hover:text-white transition-colors"
+                        className="rounded-md bg-ec-accent/10 px-2 py-1 text-[10px] font-bold text-ec-accent hover:bg-ec-accent hover:text-white transition-colors flex-shrink-0"
                       >
                         Download
                       </a>
