@@ -135,6 +135,7 @@ export default function SignupClient() {
   const [busy, setBusy] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
   const [remember, setRemember] = useState(true);
+  const [signupSubmittedEmail, setSignupSubmittedEmail] = useState("");
   const [touched, setTouched] = useState({
     email: false,
     password: false,
@@ -282,15 +283,38 @@ export default function SignupClient() {
 
       await apiFetch("/api/v1/auth/signup", { method: "POST", body: fd });
       toast(
-        "Thanks, we received your registration. An administrator will review it and email you when your account is active.",
+        "Registration received. Check your email to verify this account before admin review.",
         "success"
       );
+      setSignupSubmittedEmail(state.email.trim());
       setMode("login");
+      router.push(`/verify-email?email=${encodeURIComponent(state.email.trim())}`);
     } catch (e: unknown) {
       const errText =
         errorMessage(e) ??
         "We could not send your registration. Check your connection and try again.";
       toast(errText, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendVerification() {
+    const email = signupSubmittedEmail || state.email.trim();
+    if (!looksLikeEmail(email)) {
+      toast("Enter the email address you registered with.", "warning");
+      return;
+    }
+    setBusy(true);
+    try {
+      await apiFetch("/api/v1/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      toast("Verification email sent. Check your inbox.", "success");
+    } catch (e: unknown) {
+      toast(errorMessage(e) ?? "Could not resend verification email.", "error");
     } finally {
       setBusy(false);
     }
@@ -474,6 +498,27 @@ export default function SignupClient() {
           </div>
 
           {mode === "login" ? (
+            <>
+            {signupSubmittedEmail ? (
+              <div className="mt-6 rounded-lg border border-ec-border bg-ec-surface-raised p-4 text-sm text-ec-text-secondary">
+                <p>
+                  Verify{" "}
+                  <span className="font-semibold text-ec-text">
+                    {signupSubmittedEmail}
+                  </span>{" "}
+                  before signing in. After email verification, an administrator
+                  can approve the account.
+                </p>
+                <button
+                  type="button"
+                  className="mt-3 text-sm font-semibold text-ec-accent underline-offset-2 hover:underline disabled:opacity-60"
+                  onClick={resendVerification}
+                  disabled={busy}
+                >
+                  Resend verification email
+                </button>
+              </div>
+            ) : null}
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-ec-text-secondary">
                 <input
@@ -493,6 +538,7 @@ export default function SignupClient() {
                 Forgot password?
               </button>
             </div>
+            </>
           ) : null}
 
           {mode === "signup" ? (

@@ -14,6 +14,7 @@ import (
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/config"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/delivery/controller"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
+	emailadapter "github.com/abenezer54/ethio-chain-logistics/backend/internal/email"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/repository"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/storage"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/usecase"
@@ -50,8 +51,22 @@ func main() {
 	userRepo := repository.NewUserRepo(pool)
 	docRepo := repository.NewKYCDocRepo(pool)
 	shipmentRepo := repository.NewShipmentRepo(pool)
-	emailSender := usecase.NoopEmailSender{}
-	authUC := usecase.NewAuthUsecase(userRepo, docRepo, emailSender, cfg.JWTSecret)
+	var emailSender usecase.EmailSender = usecase.NoopEmailSender{}
+	if cfg.EmailProvider == "brevo" {
+		brevoSender, err := emailadapter.NewBrevoSender(emailadapter.BrevoConfig{
+			APIKey:      cfg.BrevoAPIKey,
+			SenderEmail: cfg.BrevoSenderEmail,
+			SenderName:  cfg.BrevoSenderName,
+		})
+		if err != nil {
+			log.Fatalf("email: %v", err)
+		}
+		emailSender = brevoSender
+		log.Printf("brevo email sender enabled from %s", cfg.BrevoSenderEmail)
+	} else {
+		log.Printf("noop email sender enabled")
+	}
+	authUC := usecase.NewAuthUsecase(userRepo, docRepo, emailSender, cfg.JWTSecret, cfg.FrontendBaseURL, cfg.BrevoOTPTemplateID)
 	shipmentUC := usecase.NewShipmentUsecase(shipmentRepo)
 	authHandlers := controller.NewAuthHandlers(authUC, fileStore)
 	adminHandlers := controller.NewAdminHandlers(authUC, fileStore)

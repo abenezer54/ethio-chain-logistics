@@ -77,14 +77,14 @@ SELECT
   truck_id, carrier_company,
   employee_id, branch_office,
   department, staff_code,
-  approved_by, approved_at,
+  approved_by, approved_at, email_verified_at,
   created_at, updated_at
 FROM users
 WHERE email = $1
 `
 	var u domain.User
 	var role, status string
-	var approvedAt *time.Time
+	var approvedAt, emailVerifiedAt *time.Time
 	var approvedBy, fullName, phone, businessName, vatNumber *string
 	var companyAddress, originCountry, truckID, carrierCompany *string
 	var employeeID, branchOffice, department, staffCode *string
@@ -96,7 +96,7 @@ WHERE email = $1
 		&truckID, &carrierCompany,
 		&employeeID, &branchOffice,
 		&department, &staffCode,
-		&approvedBy, &approvedAt,
+		&approvedBy, &approvedAt, &emailVerifiedAt,
 		&u.CreatedAt, &u.UpdatedAt,
 	)
 	if err != nil {
@@ -121,6 +121,7 @@ WHERE email = $1
 	u.StaffCode = deref(staffCode)
 	u.ApprovedBy = deref(approvedBy)
 	u.ApprovedAt = approvedAt
+	u.EmailVerifiedAt = emailVerifiedAt
 	return u, nil
 }
 
@@ -134,14 +135,14 @@ SELECT
   truck_id, carrier_company,
   employee_id, branch_office,
   department, staff_code,
-  approved_by, approved_at,
+  approved_by, approved_at, email_verified_at,
   created_at, updated_at
 FROM users
 WHERE id = $1
 `
 	var u domain.User
 	var role, status string
-	var approvedAt *time.Time
+	var approvedAt, emailVerifiedAt *time.Time
 	var approvedBy, fullName, phone, businessName, vatNumber *string
 	var companyAddress, originCountry, truckID, carrierCompany *string
 	var employeeID, branchOffice, department, staffCode *string
@@ -153,7 +154,7 @@ WHERE id = $1
 		&truckID, &carrierCompany,
 		&employeeID, &branchOffice,
 		&department, &staffCode,
-		&approvedBy, &approvedAt,
+		&approvedBy, &approvedAt, &emailVerifiedAt,
 		&u.CreatedAt, &u.UpdatedAt,
 	)
 	if err != nil {
@@ -178,6 +179,7 @@ WHERE id = $1
 	u.StaffCode = deref(staffCode)
 	u.ApprovedBy = deref(approvedBy)
 	u.ApprovedAt = approvedAt
+	u.EmailVerifiedAt = emailVerifiedAt
 	return u, nil
 }
 
@@ -185,7 +187,7 @@ func (r *UserRepo) SetUserActive(ctx context.Context, userID, approvedBy string,
 	const q = `
 UPDATE users
 SET status = 'ACTIVE', approved_by = $2, approved_at = $3, updated_at = now()
-WHERE id = $1 AND status IN ('PENDING', 'INFO_REQUIRED')
+WHERE id = $1 AND status IN ('PENDING', 'INFO_REQUIRED') AND email_verified_at IS NOT NULL
 `
 	ct, err := r.pool.inner.Exec(ctx, q, userID, approvedBy, approvedAt)
 	if err != nil {
@@ -244,7 +246,7 @@ SELECT
   department, staff_code,
   created_at, updated_at
 FROM users
-WHERE status IN ('PENDING', 'INFO_REQUIRED')
+WHERE status IN ('PENDING', 'INFO_REQUIRED') AND email_verified_at IS NOT NULL
 ORDER BY created_at ASC
 LIMIT $1
 `
@@ -293,6 +295,162 @@ LIMIT $1
 		return nil, fmt.Errorf("iterate pending users: %w", err)
 	}
 	return out, nil
+}
+
+func (r *UserRepo) ListUnverifiedUsers(ctx context.Context, limit int) ([]domain.User, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	const q = `
+SELECT
+  id, email, role, status,
+  full_name, phone,
+  business_name, vat_number,
+  company_address, origin_country,
+  truck_id, carrier_company,
+  employee_id, branch_office,
+  department, staff_code,
+  created_at, updated_at
+FROM users
+WHERE email_verified_at IS NULL AND role <> 'ADMIN'
+ORDER BY created_at ASC
+LIMIT $1
+`
+	rows, err := r.pool.inner.Query(ctx, q, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list unverified users: %w", err)
+	}
+	defer rows.Close()
+	return scanUserRows(rows, limit)
+}
+
+func (r *UserRepo) CreateEmailVerificationToken(ctx context.Context, userID, tokenHash string, expiresAt time.Time) error {
+	const invalidate = `
+UPDATE email_verification_tokens
+SET used_at = now()
+WHERE user_id = $1 AND used_at IS NULL
+`
+	if _, err := r.pool.inner.Exec(ctx, invalidate, userID); err != nil {
+		return fmt.Errorf("invalidate email verification tokens: %w", err)
+	}
+
+	const q = `
+INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
+VALUES ($1, $2, $3)
+`
+	if _, err := r.pool.inner.Exec(ctx, q, userID, tokenHash, expiresAt); err != nil {
+		return fmt.Errorf("create email verification token: %w", err)
+	}
+	return nil
+}
+
+func (r *UserRepo) VerifyEmailByTokenHash(ctx context.Context, userID, tokenHash string, now time.Time) (domain.User, error) {
+	tx, err := r.pool.inner.Begin(ctx)
+	if err != nil {
+		return domain.User{}, fmt.Errorf("begin verify email: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	const tokenQ = `
+UPDATE email_verification_tokens
+SET used_at = $2
+WHERE token_hash = $1 AND used_at IS NULL AND expires_at > $2
+  AND user_id = $3
+RETURNING user_id
+`
+	var verifiedUserID string
+	if err := tx.QueryRow(ctx, tokenQ, tokenHash, now, userID).Scan(&verifiedUserID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.User{}, domain.ErrNotFound
+		}
+		return domain.User{}, fmt.Errorf("consume email verification token: %w", err)
+	}
+
+	const updateUserQ = `
+UPDATE users
+SET email_verified_at = COALESCE(email_verified_at, $2), updated_at = now()
+WHERE id = $1
+`
+	if _, err := tx.Exec(ctx, updateUserQ, verifiedUserID, now); err != nil {
+		return domain.User{}, fmt.Errorf("mark email verified: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.User{}, fmt.Errorf("commit verify email: %w", err)
+	}
+	return r.GetUserByID(ctx, verifiedUserID)
+}
+
+func (r *UserRepo) UpdateUnverifiedEmail(ctx context.Context, userID, email string) (domain.User, error) {
+	const q = `
+UPDATE users
+SET email = $2, updated_at = now()
+WHERE id = $1 AND email_verified_at IS NULL
+`
+	ct, err := r.pool.inner.Exec(ctx, q, userID, strings.TrimSpace(email))
+	if err != nil {
+		if isUniqueViolation(err) {
+			return domain.User{}, domain.ErrConflict
+		}
+		return domain.User{}, fmt.Errorf("update unverified email: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return domain.User{}, domain.ErrNotFound
+	}
+	return r.GetUserByID(ctx, userID)
+}
+
+func (r *UserRepo) CreatePasswordResetToken(ctx context.Context, userID, tokenHash string, expiresAt time.Time) error {
+	const invalidate = `
+UPDATE password_reset_tokens
+SET used_at = now()
+WHERE user_id = $1 AND used_at IS NULL
+`
+	if _, err := r.pool.inner.Exec(ctx, invalidate, userID); err != nil {
+		return fmt.Errorf("invalidate password reset tokens: %w", err)
+	}
+
+	const q = `
+INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+VALUES ($1, $2, $3)
+`
+	if _, err := r.pool.inner.Exec(ctx, q, userID, tokenHash, expiresAt); err != nil {
+		return fmt.Errorf("create password reset token: %w", err)
+	}
+	return nil
+}
+
+func (r *UserRepo) VerifyPasswordResetByTokenHash(ctx context.Context, userID, tokenHash string, now time.Time) (domain.User, error) {
+	const q = `
+UPDATE password_reset_tokens
+SET used_at = $3
+WHERE user_id = $1 AND token_hash = $2 AND used_at IS NULL AND expires_at > $3
+RETURNING user_id
+`
+	var verifiedUserID string
+	if err := r.pool.inner.QueryRow(ctx, q, userID, tokenHash, now).Scan(&verifiedUserID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.User{}, domain.ErrNotFound
+		}
+		return domain.User{}, fmt.Errorf("consume password reset token: %w", err)
+	}
+	return r.GetUserByID(ctx, verifiedUserID)
+}
+
+func (r *UserRepo) UpdatePassword(ctx context.Context, userID, passwordHash string) error {
+	const q = `
+UPDATE users
+SET password_hash = $2, updated_at = now()
+WHERE id = $1
+`
+	ct, err := r.pool.inner.Exec(ctx, q, userID, passwordHash)
+	if err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+	if ct.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }
 
 func (r *UserRepo) ListSellers(ctx context.Context, query string, limit int) ([]domain.User, error) {
@@ -385,4 +543,46 @@ func deref(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+func scanUserRows(rows pgx.Rows, capacity int) ([]domain.User, error) {
+	out := make([]domain.User, 0, capacity)
+	for rows.Next() {
+		var u domain.User
+		var role, status string
+		var fullName, phone, businessName, vatNumber *string
+		var companyAddress, originCountry, truckID, carrierCompany *string
+		var employeeID, branchOffice, department, staffCode *string
+		if err := rows.Scan(
+			&u.ID, &u.Email, &role, &status,
+			&fullName, &phone,
+			&businessName, &vatNumber,
+			&companyAddress, &originCountry,
+			&truckID, &carrierCompany,
+			&employeeID, &branchOffice,
+			&department, &staffCode,
+			&u.CreatedAt, &u.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+		u.Role = domain.UserRole(role)
+		u.Status = domain.UserStatus(status)
+		u.FullName = deref(fullName)
+		u.Phone = deref(phone)
+		u.BusinessName = deref(businessName)
+		u.VATNumber = deref(vatNumber)
+		u.CompanyAddress = deref(companyAddress)
+		u.OriginCountry = deref(originCountry)
+		u.TruckID = deref(truckID)
+		u.CarrierCompany = deref(carrierCompany)
+		u.EmployeeID = deref(employeeID)
+		u.BranchOffice = deref(branchOffice)
+		u.Department = deref(department)
+		u.StaffCode = deref(staffCode)
+		out = append(out, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate users: %w", err)
+	}
+	return out, nil
 }

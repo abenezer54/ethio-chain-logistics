@@ -5,8 +5,8 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"strconv"
+	"strings"
 
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/storage"
@@ -29,11 +29,27 @@ func (h *AdminHandlers) RegisterRoutes(v1 *gin.RouterGroup, jwtSecret string) {
 	admin.Use(RequireRole(domain.RoleAdmin))
 
 	admin.GET("/pending-approvals", h.listPending)
+	admin.GET("/unverified-users", h.listUnverified)
 	admin.GET("/users/:id/docs", h.listUserDocs)
 	admin.GET("/docs/:docID/download", h.downloadDoc)
 	admin.POST("/users/:id/approve", h.approveUser)
 	admin.POST("/users/:id/deny", h.denyUser)
 	admin.POST("/users/:id/request-info", h.requestInfo)
+}
+
+func (h *AdminHandlers) listUnverified(c *gin.Context) {
+	limit := 100
+	if v := c.Query("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			limit = n
+		}
+	}
+	users, err := h.auth.ListUnverifiedUsers(c.Request.Context(), limit)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": users})
 }
 
 func (h *AdminHandlers) listPending(c *gin.Context) {
@@ -120,4 +136,3 @@ func (h *AdminHandlers) requestInfo(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "INFO_REQUIRED"})
 }
-

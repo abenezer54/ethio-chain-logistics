@@ -23,9 +23,9 @@ const (
 )
 
 type User struct {
-	ID           string     `json:"id"`
-	Email        string     `json:"email"`
-	PasswordHash string     `json:"-"`
+	ID           string `json:"id"`
+	Email        string `json:"email"`
+	PasswordHash string `json:"-"`
 
 	Role   UserRole   `json:"role"`
 	Status UserStatus `json:"status"`
@@ -48,8 +48,9 @@ type User struct {
 	Department string `json:"department,omitempty"`
 	StaffCode  string `json:"staff_code,omitempty"`
 
-	ApprovedBy string     `json:"approved_by,omitempty"`
-	ApprovedAt *time.Time `json:"approved_at,omitempty"`
+	ApprovedBy      string     `json:"approved_by,omitempty"`
+	ApprovedAt      *time.Time `json:"approved_at,omitempty"`
+	EmailVerifiedAt *time.Time `json:"email_verified_at,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -65,4 +66,3 @@ type KYCDocument struct {
 	StorageKey       string    `json:"storage_key"`
 	UploadedAt       time.Time `json:"uploaded_at"`
 }
-

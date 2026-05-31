@@ -596,6 +596,7 @@ export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState<PendingUser[]>([]);
+  const [unverified, setUnverified] = useState<PendingUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<PendingUser | null>(null);
   const [docs, setDocs] = useState<KYCDoc[]>([]);
   const [docPreviews, setDocPreviews] = useState<Record<string, string>>({});
@@ -633,6 +634,18 @@ export default function AdminPage() {
     }
   }, []);
 
+  const refreshUnverified = useCallback(async (t: string) => {
+    try {
+      const res = await apiFetch<{ items: PendingUser[] }>(
+        "/api/v1/admin/unverified-users?limit=200",
+        { token: t },
+      );
+      setUnverified(res.items ?? []);
+    } catch {
+      setUnverified([]);
+    }
+  }, []);
+
   async function adminLogin() {
     if (!email.trim() || !password) return;
     setAdminLoginBusy(true);
@@ -651,6 +664,7 @@ export default function AdminPage() {
       }
       setIsLoggedIn(true);
       await refreshPending(res.token);
+      await refreshUnverified(res.token);
       toast("Signed in to the admin console.", "success");
     } catch (e: unknown) {
       const msg =
@@ -667,6 +681,7 @@ export default function AdminPage() {
     setToken("");
     setIsLoggedIn(false);
     setPending([]);
+    setUnverified([]);
   }
 
   async function openReview(u: PendingUser) {
@@ -702,6 +717,7 @@ export default function AdminPage() {
     setQueueRefreshing(true);
     try {
       await refreshPending(t);
+      await refreshUnverified(t);
     } finally {
       setQueueRefreshing(false);
     }
@@ -862,12 +878,14 @@ export default function AdminPage() {
     }
     if (p?.role === "ADMIN") {
       setToken(t);
-      void refreshPending(t).finally(() => setSessionChecked(true));
+      void Promise.all([refreshPending(t), refreshUnverified(t)]).finally(() =>
+        setSessionChecked(true),
+      );
       return;
     }
     clearStoredToken();
     setSessionChecked(true);
-  }, [router, refreshPending]);
+  }, [router, refreshPending, refreshUnverified]);
 
   if (!sessionChecked) {
     return (
@@ -1014,6 +1032,7 @@ export default function AdminPage() {
         ) : null}
 
         {isLoggedIn ? (
+          <div className="flex flex-col gap-6">
           <div className="overflow-hidden rounded-2xl border border-ec-border bg-ec-card shadow-md">
             <div className="flex flex-col gap-4 border-b border-ec-border bg-ec-surface-raised/80 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <div>
@@ -1096,6 +1115,53 @@ export default function AdminPage() {
                 </div>
               ) : null}
             </div>
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-ec-border bg-ec-card shadow-md">
+            <div className="border-b border-ec-border bg-ec-surface-raised/80 px-5 py-5 sm:px-6">
+              <h2 className="text-lg font-bold text-ec-text">
+                Email verification waitlist
+              </h2>
+              <p className="mt-0.5 text-sm text-ec-text-secondary">
+                <span className="font-semibold tabular-nums text-ec-text">
+                  {unverified.length}
+                </span>{" "}
+                registration{unverified.length === 1 ? "" : "s"} waiting for
+                OTP verification
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 p-4 sm:p-5">
+              {unverified.map((u) => (
+                <div
+                  key={pendingUserId(u)}
+                  className="flex flex-col gap-2 rounded-2xl border border-dashed border-ec-border bg-ec-surface-raised px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <div className="font-semibold text-ec-text">
+                      {u.full_name || u.email}
+                    </div>
+                    <div className="mt-1 text-xs text-ec-text-secondary">
+                      {u.email}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex rounded-full bg-ec-card px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-ec-navy ring-1 ring-ec-border">
+                      {formatRoleLabel(u.role)}
+                    </span>
+                    {formatShortDate(u.created_at) ? (
+                      <span className="text-[11px] text-ec-text-muted">
+                        {formatShortDate(u.created_at)}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+              {unverified.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-ec-border bg-ec-surface/50 px-4 py-8 text-center text-sm text-ec-text-secondary">
+                  No users are waiting on email verification.
+                </p>
+              ) : null}
+            </div>
+          </div>
           </div>
         ) : null}
       </main>
