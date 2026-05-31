@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Route,
   Ship,
+  Share2,
   Truck,
   type LucideIcon,
 } from "lucide-react";
@@ -369,6 +370,7 @@ function MilestonePanel({
   onLongitude,
   onLocationNote,
   onUseGPS,
+  onShareLocation,
   onSubmit,
 }: {
   item: TransporterShipment;
@@ -381,6 +383,7 @@ function MilestonePanel({
   onLongitude: (value: string) => void;
   onLocationNote: (value: string) => void;
   onUseGPS: () => void;
+  onShareLocation: () => void;
   onSubmit: (milestone: TransportMilestone) => void;
 }) {
   const visibleMilestones = useMemo(
@@ -406,19 +409,30 @@ function MilestonePanel({
             {legLabel(item.allocation.leg_type)} - {STATUS_LABEL[item.shipment.status] ?? item.shipment.status}
           </h2>
         </div>
-        <button
-          type="button"
-          onClick={onUseGPS}
-          disabled={gpsLoading}
-          className="ec-btn-ghost border border-ec-border bg-ec-card"
-        >
-          {gpsLoading ? (
-            <Spinner size="sm" label="Capturing GPS" />
-          ) : (
-            <Crosshair size={16} aria-hidden />
-          )}
-          Use current location
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onUseGPS}
+            disabled={gpsLoading}
+            className="ec-btn-ghost border border-ec-border bg-ec-card"
+          >
+            {gpsLoading ? (
+              <Spinner size="sm" label="Capturing GPS" />
+            ) : (
+              <Crosshair size={16} aria-hidden />
+            )}
+            Use current location
+          </button>
+          <button
+            type="button"
+            onClick={onShareLocation}
+            disabled={!latitude || !longitude}
+            className="ec-btn-ghost border border-ec-border bg-ec-card"
+          >
+            <Share2 size={16} aria-hidden />
+            Share location
+          </button>
+        </div>
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-3">
@@ -710,24 +724,73 @@ export default function TransporterWorkspace() {
   }, [selectedID, items, loadDetail]);
 
   function useCurrentLocation() {
-    if (!navigator.geolocation) {
-      toast("GPS is not available in this browser.", "error");
-      return;
+    void captureCurrentLocation();
+  }
+
+  function captureCurrentLocation(): Promise<{ latitude: string; longitude: string }> {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("GPS is not available in this browser."));
+        return;
+      }
+      setGPSLoading(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const nextLatitude = String(position.coords.latitude);
+          const nextLongitude = String(position.coords.longitude);
+          setLatitude(nextLatitude);
+          setLongitude(nextLongitude);
+          setGPSLoading(false);
+          toast("GPS location captured.", "success");
+          resolve({ latitude: nextLatitude, longitude: nextLongitude });
+        },
+        () => {
+          setGPSLoading(false);
+          reject(new Error("Could not capture GPS location."));
+        },
+        { enableHighAccuracy: true, timeout: 10000 },
+      );
+    });
+  }
+
+  async function shareCurrentLocation() {
+    let nextLatitude = latitude.trim();
+    let nextLongitude = longitude.trim();
+    if (!nextLatitude || !nextLongitude) {
+      try {
+        const captured = await captureCurrentLocation();
+        nextLatitude = captured.latitude;
+        nextLongitude = captured.longitude;
+      } catch (err) {
+        toast(errorMessage(err), "error");
+        return;
+      }
     }
-    setGPSLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLatitude(String(position.coords.latitude));
-        setLongitude(String(position.coords.longitude));
-        setGPSLoading(false);
-        toast("GPS location captured.", "success");
-      },
-      () => {
-        setGPSLoading(false);
-        toast("Could not capture GPS location.", "error");
-      },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
+
+    const shareText = [
+      `Current location: ${nextLatitude}, ${nextLongitude}`,
+      locationNote.trim() ? `Note: ${locationNote.trim()}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "Transport location",
+          text: shareText,
+        });
+        toast("Location shared.", "success");
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareText);
+        toast("Location copied to clipboard.", "success");
+      } else {
+        toast("Sharing is not available in this browser.", "error");
+      }
+    } catch (err) {
+      if ((err as DOMException)?.name === "AbortError") return;
+      toast(errorMessage(err), "error");
+    }
   }
 
   async function submitMilestone(milestone: TransportMilestone) {
@@ -841,6 +904,7 @@ export default function TransporterWorkspace() {
               onLongitude={setLongitude}
               onLocationNote={setLocationNote}
               onUseGPS={useCurrentLocation}
+              onShareLocation={shareCurrentLocation}
               onSubmit={submitMilestone}
             />
             <Timeline events={activeDetail.events ?? []} />

@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
