@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { LogOut, LayoutDashboard, Bell } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { PortalHeader } from "@/components/layout/PortalHeader";
@@ -128,8 +128,9 @@ export default function DashboardClient() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [notifLastRefresh, setNotifLastRefresh] = useState<string | null>(null);
 
-  async function fetchNotifications() {
+  const fetchNotifications = useCallback(async () => {
     setNotifLoading(true);
     try {
       const token = getStoredToken();
@@ -144,13 +145,25 @@ export default function DashboardClient() {
       setNotifications(
         Array.isArray(j.items) ? (j.items as Notification[]) : [],
       );
+      setNotifLastRefresh(new Date().toLocaleTimeString());
     } catch (err) {
       console.error("fetch notifications", err);
       setNotifications([]);
     } finally {
       setNotifLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (phase !== "ready" || !role || !notifOpen) return;
+
+    void fetchNotifications();
+    const timer = window.setInterval(() => {
+      void fetchNotifications();
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [fetchNotifications, notifOpen, phase, role]);
 
   const panel = role ? workspacePanel(role) : null;
 
@@ -190,6 +203,10 @@ export default function DashboardClient() {
                     <h4 className="mb-2 text-sm font-semibold">
                       Notifications
                     </h4>
+                    <p className="mb-2 text-xs text-ec-text-muted">
+                      Auto-refreshes every 5 seconds while open.
+                      {notifLastRefresh ? ` Last updated: ${notifLastRefresh}.` : ""}
+                    </p>
                     {notifLoading ? (
                       <p className="text-sm text-ec-text-muted">Loading…</p>
                     ) : (
