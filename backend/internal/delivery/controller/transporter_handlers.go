@@ -26,6 +26,7 @@ func (h *TransporterHandlers) RegisterRoutes(v1 *gin.RouterGroup, jwtSecret stri
 	t.GET("/shipments", h.listShipments)
 	t.GET("/shipments/:id", h.getShipment)
 	t.POST("/shipments/:id/milestones", h.addMilestone)
+	t.POST("/shipments/:id/location", h.shareLocation)
 }
 
 func (h *TransporterHandlers) listShipments(c *gin.Context) {
@@ -77,6 +78,34 @@ func (h *TransporterHandlers) addMilestone(c *gin.Context) {
 		ShipmentID:    strings.TrimSpace(c.Param("id")),
 		AllocationID:  strings.TrimSpace(body.AllocationID),
 		Milestone:     domain.TransportMilestone(strings.ToUpper(strings.TrimSpace(body.Milestone))),
+		Latitude:      body.Latitude,
+		Longitude:     body.Longitude,
+		LocationNote:  body.LocationNote,
+	})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, item)
+}
+
+func (h *TransporterHandlers) shareLocation(c *gin.Context) {
+	var body struct {
+		AllocationID string `json:"allocation_id"`
+		Latitude     string `json:"latitude"`
+		Longitude    string `json:"longitude"`
+		LocationNote string `json:"location_note"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
+		return
+	}
+
+	item, err := h.transporter.ShareLocation(c.Request.Context(), usecase.ShareTransportLocationRequest{
+		TransporterID: currentUserID(c),
+		ActorRole:     currentUserRole(c),
+		ShipmentID:    strings.TrimSpace(c.Param("id")),
+		AllocationID:  strings.TrimSpace(body.AllocationID),
 		Latitude:      body.Latitude,
 		Longitude:     body.Longitude,
 		LocationNote:  body.LocationNote,

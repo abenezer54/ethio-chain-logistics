@@ -160,7 +160,7 @@ export default function DashboardClient() {
     void fetchNotifications();
     const timer = window.setInterval(() => {
       void fetchNotifications();
-    }, 5000);
+    }, 10000);
 
     return () => window.clearInterval(timer);
   }, [fetchNotifications, notifOpen, phase, role]);

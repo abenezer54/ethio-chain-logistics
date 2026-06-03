@@ -14,6 +14,7 @@ type TransporterRepository interface {
 	ListAssignedShipments(ctx context.Context, transporterID string, limit int) ([]domain.TransporterShipment, error)
 	GetAssignedShipment(ctx context.Context, transporterID, shipmentID, allocationID string) (domain.TransporterShipment, error)
 	AddMilestone(ctx context.Context, req AddTransportMilestoneRequest) (domain.TransporterShipment, error)
+	ShareLocation(ctx context.Context, req ShareTransportLocationRequest) (domain.TransporterShipment, error)
 }
 
 type TransporterUsecase struct {
@@ -66,6 +67,63 @@ func (u *TransporterUsecase) AddMilestone(ctx context.Context, req AddTransportM
 	req.Longitude = strings.TrimSpace(req.Longitude)
 	req.LocationNote = strings.TrimSpace(req.LocationNote)
 	return u.repo.AddMilestone(ctx, req)
+}
+
+type ShareTransportLocationRequest struct {
+	TransporterID string
+	ActorRole     domain.UserRole
+	ShipmentID    string
+	AllocationID  string
+	Latitude      string
+	Longitude     string
+	LocationNote  string
+}
+
+func (u *TransporterUsecase) ShareLocation(ctx context.Context, req ShareTransportLocationRequest) (domain.TransporterShipment, error) {
+	if err := req.Validate(); err != nil {
+		return domain.TransporterShipment{}, fmt.Errorf("%w: %v", domain.ErrValidation, err)
+	}
+	req.TransporterID = strings.TrimSpace(req.TransporterID)
+	req.ShipmentID = strings.TrimSpace(req.ShipmentID)
+	req.AllocationID = strings.TrimSpace(req.AllocationID)
+	req.Latitude = strings.TrimSpace(req.Latitude)
+	req.Longitude = strings.TrimSpace(req.Longitude)
+	req.LocationNote = strings.TrimSpace(req.LocationNote)
+	return u.repo.ShareLocation(ctx, req)
+}
+
+func (r ShareTransportLocationRequest) Validate() error {
+	if r.ActorRole != domain.RoleTransporter {
+		return fmt.Errorf("only transporters can share transport locations")
+	}
+	if strings.TrimSpace(r.TransporterID) == "" {
+		return fmt.Errorf("transporter id is required")
+	}
+	if _, err := uuid.Parse(strings.TrimSpace(r.TransporterID)); err != nil {
+		return fmt.Errorf("transporter id must be a valid UUID")
+	}
+	if strings.TrimSpace(r.ShipmentID) == "" {
+		return fmt.Errorf("shipment id is required")
+	}
+	if _, err := uuid.Parse(strings.TrimSpace(r.ShipmentID)); err != nil {
+		return fmt.Errorf("shipment id must be a valid UUID")
+	}
+	if strings.TrimSpace(r.AllocationID) == "" {
+		return fmt.Errorf("allocation id is required")
+	}
+	if _, err := uuid.Parse(strings.TrimSpace(r.AllocationID)); err != nil {
+		return fmt.Errorf("allocation id must be a valid UUID")
+	}
+	if strings.TrimSpace(r.Latitude) == "" || strings.TrimSpace(r.Longitude) == "" {
+		return fmt.Errorf("latitude and longitude are required")
+	}
+	if err := validateCoordinate(r.Latitude, -90, 90, "latitude"); err != nil {
+		return err
+	}
+	if err := validateCoordinate(r.Longitude, -180, 180, "longitude"); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r AddTransportMilestoneRequest) Validate() error {

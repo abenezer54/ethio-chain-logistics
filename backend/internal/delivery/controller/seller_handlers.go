@@ -34,6 +34,7 @@ func (h *SellerHandlers) RegisterRoutes(v1 *gin.RouterGroup, jwtSecret string) {
 
 	s.GET("/dashboard", h.dashboard)
 	s.GET("/pending", h.listPending)
+	s.GET("/shipments/:id", h.getShipmentDetail)
 	s.GET("/shipments/:id/documents", h.getDocuments)
 	s.POST("/shipments/:id/verify", h.verifyShipment)
 	s.POST("/shipments/:id/documents", h.uploadSellerDocument)
@@ -78,6 +79,15 @@ func (h *SellerHandlers) getDocuments(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": docs})
+}
+
+func (h *SellerHandlers) getShipmentDetail(c *gin.Context) {
+	detail, err := h.seller.GetShipmentDetail(c.Request.Context(), currentUserID(c), strings.TrimSpace(c.Param("id")))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, detail)
 }
 
 func (h *SellerHandlers) downloadSellerDocument(c *gin.Context) {

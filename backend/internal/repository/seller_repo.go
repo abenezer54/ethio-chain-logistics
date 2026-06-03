@@ -2,10 +2,12 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
+	"github.com/jackc/pgx/v5"
 )
 
 type SellerRepo struct {
@@ -51,6 +53,46 @@ LIMIT $2
 		return nil, fmt.Errorf("iterate shipments: %w", err)
 	}
 	return out, nil
+}
+
+func (r *SellerRepo) GetShipmentDetail(ctx context.Context, sellerID, shipmentID string) (domain.ShipmentDetail, error) {
+	const q = `
+SELECT
+  id, importer_id, seller_id,
+  origin_port, destination_port, cargo_type,
+  weight_kg::text, COALESCE(volume_cbm::text, ''),
+  status, anchor_status, COALESCE(blockchain_tx_hash, ''),
+  created_at, updated_at
+FROM shipments
+WHERE id = $1 AND seller_id = $2
+`
+	shipment, err := scanShipment(r.pool.inner.QueryRow(ctx, q, shipmentID, sellerID))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ShipmentDetail{}, domain.ErrNotFound
+		}
+		return domain.ShipmentDetail{}, fmt.Errorf("get seller shipment detail: %w", err)
+	}
+
+	shipmentRepo := &ShipmentRepo{pool: r.pool}
+	docs, err := shipmentRepo.listDocuments(ctx, shipmentID)
+	if err != nil {
+		return domain.ShipmentDetail{}, err
+	}
+	sellerDocs, err := shipmentRepo.listSellerDocuments(ctx, shipmentID)
+	if err != nil {
+		return domain.ShipmentDetail{}, err
+	}
+	events, err := shipmentRepo.listEvents(ctx, shipmentID)
+	if err != nil {
+		return domain.ShipmentDetail{}, err
+	}
+	return domain.ShipmentDetail{
+		Shipment:        shipment,
+		Documents:       docs,
+		SellerDocuments: sellerDocs,
+		Events:          events,
+	}, nil
 }
 
 func (r *SellerRepo) GetShipmentDocuments(ctx context.Context, shipmentID string) ([]domain.ShipmentDocument, error) {

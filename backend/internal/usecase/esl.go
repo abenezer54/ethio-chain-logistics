@@ -12,6 +12,7 @@ import (
 
 type ESLRepository interface {
 	ListVerifiedShipments(ctx context.Context, limit int) ([]domain.Shipment, error)
+	ListActiveShipmentDetails(ctx context.Context, limit int) ([]domain.ShipmentDetail, error)
 	ListAvailableTransportSlots(ctx context.Context, limit int) ([]domain.TransportSlot, error)
 	AllocateShipment(ctx context.Context, eslAgentID, shipmentID, shipSlotID, truckSlotID string, expectedDepartureAt time.Time, notes string) (domain.ShipmentAllocationDetail, error)
 }
@@ -29,6 +30,13 @@ func (u *ESLUsecase) ListVerifiedShipments(ctx context.Context, actorRole domain
 		return nil, domain.ErrForbidden
 	}
 	return u.repo.ListVerifiedShipments(ctx, limit)
+}
+
+func (u *ESLUsecase) ListActiveShipmentDetails(ctx context.Context, actorRole domain.UserRole, limit int) ([]domain.ShipmentDetail, error) {
+	if actorRole != domain.RoleESLAgent {
+		return nil, domain.ErrForbidden
+	}
+	return u.repo.ListActiveShipmentDetails(ctx, limit)
 }
 
 func (u *ESLUsecase) ListAvailableTransportSlots(ctx context.Context, actorRole domain.UserRole, limit int) ([]domain.TransportSlot, error) {

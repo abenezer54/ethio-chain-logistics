@@ -3,9 +3,17 @@ import { useEffect, useState, useCallback } from "react";
 import PendingVerifications from "@/components/seller/PendingVerifications";
 import ApprovedShipments from "@/components/seller/ApprovedShipments";
 import ShipmentTimeline from "@/components/seller/ShipmentTimeline";
+import {
+  LatestLocationBadge,
+  ShipmentLocationTimeline,
+} from "@/components/tracking/ShipmentLocationTimeline";
 import { useRouter } from "next/navigation";
 import { getStoredToken } from "@/lib/auth-storage";
 import { apiFetch } from "@/lib/api";
+import {
+  getSellerShipment,
+  type ShipmentDetail,
+} from "@/lib/shipments";
 import {
   ClipboardCheck,
   LayoutDashboard,
@@ -33,6 +41,10 @@ export default function SellerWorkspace() {
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(
     null,
   );
+  const [selectedDetail, setSelectedDetail] = useState<ShipmentDetail | null>(
+    null,
+  );
+  const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -66,7 +78,7 @@ export default function SellerWorkspace() {
         setPending(pendingList);
 
         // Filter categories
-        const inTransit = approvedList.filter((s) =>
+        const inTransit = allList.filter((s) =>
           ["ALLOCATED", "IN_TRANSIT", "ARRIVED"].includes(
             (s.status || "").toUpperCase(),
           ),
@@ -115,6 +127,32 @@ export default function SellerWorkspace() {
     fetchAll(ac.signal);
     return () => ac.abort();
   }, [fetchAll]);
+
+  useEffect(() => {
+    if (!selectedShipment?.id) {
+      setSelectedDetail(null);
+      return;
+    }
+    let cancelled = false;
+    setDetailLoading(true);
+    const token = getStoredToken();
+    getSellerShipment(token ?? "", selectedShipment.id)
+      .then((detail) => {
+        if (!cancelled) setSelectedDetail(detail);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error("seller shipment detail", err);
+          setSelectedDetail(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedShipment?.id]);
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -379,6 +417,12 @@ export default function SellerWorkspace() {
                           >
                             {s.status?.replace(/_/g, " ")}
                           </span>
+                          {selectedDetail?.shipment.id === s.id ? (
+                            <LatestLocationBadge
+                              events={selectedDetail.events}
+                              emptyLabel="No GPS"
+                            />
+                          ) : null}
                         </div>
                         <div className="flex items-center gap-2 truncate">
                           <span
@@ -414,7 +458,22 @@ export default function SellerWorkspace() {
             {/* Right Column: Status Timeline */}
             <div className="lg:col-span-7">
               <div className="sticky top-8">
-                <ShipmentTimeline shipment={selectedShipment} />
+                <div className="space-y-4">
+                  <ShipmentTimeline shipment={selectedShipment} />
+                  {selectedShipment ? (
+                    detailLoading ? (
+                      <div className="ec-card rounded-lg p-6 text-sm text-ec-text-muted">
+                        Loading location updates...
+                      </div>
+                    ) : (
+                      <ShipmentLocationTimeline
+                        events={selectedDetail?.events ?? []}
+                        title="Shared transport locations"
+                        emptyText="Transporter GPS updates for this shipment will appear here."
+                      />
+                    )
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>
