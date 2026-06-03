@@ -3,6 +3,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Activity,
+  AlertCircle,
+  BarChart3,
+  Clock,
   FileText,
   LogOut,
   CheckCircle,
@@ -14,10 +18,17 @@ import {
   RefreshCw,
   Inbox,
   Shield,
+  ShieldCheck,
   Calendar,
   ChevronRight,
   Ban,
+  FileCheck,
+  Package,
+  Ship,
+  Truck,
+  Users,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import Image from "next/image";
 import { API_BASE, apiFetch } from "@/lib/api";
 import { type LoginResponse } from "@/lib/auth-redirect";
@@ -65,6 +76,121 @@ type KYCDoc = {
   uploaded_at: string;
 };
 
+type AdminView = "overview" | "approvals";
+
+type AdminCount = {
+  key: string;
+  count: number;
+};
+
+type AdminShipmentSummary = {
+  id: string;
+  importer_id: string;
+  importer_name?: string;
+  importer_email?: string;
+  seller_id?: string;
+  seller_name?: string;
+  seller_email?: string;
+  origin_port: string;
+  destination_port: string;
+  cargo_type: string;
+  weight_kg: string;
+  volume_cbm?: string;
+  status: string;
+  anchor_status: string;
+  transport_refs?: string;
+  action_reason?: string;
+  last_event_action?: string;
+  last_event_message?: string;
+  last_event_at?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type AdminShipmentEventSummary = {
+  id: string;
+  shipment_id: string;
+  shipment_status: string;
+  actor_role: string;
+  action: string;
+  message?: string;
+  anchor_status: string;
+  created_at: string;
+};
+
+type AdminTransportSlotSummary = {
+  id: string;
+  transport_type: string;
+  name: string;
+  reference_code: string;
+  origin: string;
+  destination: string;
+  remaining_capacity_kg: string;
+  available_from: string;
+  status: string;
+};
+
+type AdminAnalytics = {
+  generated_at: string;
+  overview: {
+    total: number;
+    active: number;
+    awaiting_documents: number;
+    awaiting_seller_verification: number;
+    awaiting_esl_allocation: number;
+    allocated_awaiting_departure: number;
+    in_transit: number;
+    arrived: number;
+    at_customs: number;
+    held_for_inspection: number;
+    cleared: number;
+    rejected: number;
+    action_required: number;
+    failed_blockchain_proofs: number;
+  };
+  shipments_by_status: AdminCount[];
+  ongoing_shipments: AdminShipmentSummary[];
+  action_required_shipments: AdminShipmentSummary[];
+  recent_events: AdminShipmentEventSummary[];
+  users: {
+    total: number;
+    active: number;
+    pending: number;
+    denied: number;
+    info_required: number;
+    email_unverified: number;
+    by_role: AdminCount[];
+    by_status: AdminCount[];
+  };
+  documents: {
+    shipment_documents_total: number;
+    seller_documents_total: number;
+    pending_verification: number;
+    matched: number;
+    mismatched: number;
+    rejected: number;
+    by_verification_status: AdminCount[];
+    by_anchor_status: AdminCount[];
+  };
+  transport: {
+    slots_total: number;
+    available_slots: number;
+    booked_slots: number;
+    maintenance_slots: number;
+    allocated_shipments: number;
+    remaining_capacity_kg: string;
+    upcoming_departures: AdminTransportSlotSummary[];
+  };
+  blockchain: {
+    jobs_total: number;
+    pending: number;
+    processing: number;
+    anchored: number;
+    failed: number;
+    by_status: AdminCount[];
+  };
+};
+
 function formatRoleLabel(role: string): string {
   const map: Record<string, string> = {
     IMPORTER: "Importer",
@@ -92,6 +218,91 @@ function formatShortDate(iso?: string): string | null {
   });
 }
 
+function formatDateTime(iso?: string): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatNumber(value: number | string | undefined): string {
+  const n =
+    typeof value === "number"
+      ? value
+      : Number.parseFloat(String(value || "0"));
+  if (!Number.isFinite(n)) return "0";
+  return new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: n >= 100 ? 0 : 1,
+  }).format(n);
+}
+
+function formatWeight(value?: string): string {
+  const n = Number.parseFloat(value || "0");
+  if (!Number.isFinite(n) || n <= 0) return "0 kg";
+  if (n >= 1000) return `${formatNumber(n / 1000)} t`;
+  return `${formatNumber(n)} kg`;
+}
+
+function formatStatusLabel(status: string): string {
+  return status
+    .split("_")
+    .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function formatActionLabel(action: string): string {
+  return formatStatusLabel(action);
+}
+
+function shortId(id: string): string {
+  if (!id) return "Unknown";
+  return id.length <= 8 ? id : id.slice(0, 8);
+}
+
+function statusTone(status: string): string {
+  if (status === "CLEARED" || status === "ANCHORED" || status === "ACTIVE") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  }
+  if (
+    status === "REJECTED" ||
+    status === "FAILED" ||
+    status === "DENIED" ||
+    status === "HELD_FOR_INSPECTION"
+  ) {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+  if (
+    status === "PENDING" ||
+    status === "PROCESSING" ||
+    status === "INFO_REQUIRED" ||
+    status.includes("PENDING") ||
+    status.includes("AWAITING")
+  ) {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
+  if (status === "IN_TRANSIT" || status === "ALLOCATED") {
+    return "border-blue-200 bg-blue-50 text-blue-800";
+  }
+  return "border-ec-border bg-ec-surface-raised text-ec-text-secondary";
+}
+
+function statusBadge(status: string) {
+  return (
+    <span
+      className={`inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide ${statusTone(
+        status,
+      )}`}
+    >
+      {formatStatusLabel(status)}
+    </span>
+  );
+}
+
 function userInitials(fullName: string | undefined, email: string): string {
   const n = (fullName || "").trim();
   if (n) {
@@ -108,10 +319,23 @@ function userInitials(fullName: string | undefined, email: string): string {
 function Sidebar({
   onLogout,
   isLoggedIn,
+  activeView,
+  onViewChange,
 }: {
   onLogout: () => void;
   isLoggedIn: boolean;
+  activeView: AdminView;
+  onViewChange: (view: AdminView) => void;
 }) {
+  const navItems: Array<{
+    view: AdminView;
+    label: string;
+    icon: LucideIcon;
+  }> = [
+    { view: "overview", label: "Overview", icon: LayoutDashboard },
+    { view: "approvals", label: "Pending approvals", icon: ClipboardList },
+  ];
+
   return (
     <>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[17.5rem] flex-col border-r border-white/10 bg-gradient-to-b from-ec-navy to-ec-navy-dark text-white shadow-xl md:flex">
@@ -132,17 +356,25 @@ function Sidebar({
           className="flex flex-1 flex-col gap-1 px-3 py-5"
           aria-label="Admin navigation"
         >
-          <span className="flex cursor-default items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-400">
-            <LayoutDashboard size={18} aria-hidden />
-            Overview
-            <span className="ml-auto rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">
-              Soon
-            </span>
-          </span>
-          <span className="flex items-center gap-3 rounded-xl bg-white/12 px-3 py-2.5 text-sm font-semibold text-white shadow-inner ring-1 ring-white/10">
-            <ClipboardList size={18} aria-hidden />
-            Pending approvals
-          </span>
+          {navItems.map(({ view, label, icon: Icon }) => {
+            const active = activeView === view;
+            return (
+              <button
+                key={view}
+                type="button"
+                onClick={() => onViewChange(view)}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent ${
+                  active
+                    ? "bg-white/12 text-white shadow-inner ring-1 ring-white/10"
+                    : "text-slate-400 hover:bg-white/5 hover:text-white"
+                }`}
+                aria-current={active ? "page" : undefined}
+              >
+                <Icon size={18} aria-hidden />
+                {label}
+              </button>
+            );
+          })}
         </nav>
         <div className="border-t border-white/10 px-3 py-3">
           <Link
@@ -179,19 +411,39 @@ function Sidebar({
           <div className="leading-tight">
             <span className="block text-sm font-bold text-ec-text">Admin</span>
             <span className="text-[10px] font-medium uppercase tracking-wide text-ec-text-muted">
-              Approvals
+              {activeView === "overview" ? "Overview" : "Approvals"}
             </span>
           </div>
         </div>
         {isLoggedIn ? (
-          <button
-            type="button"
-            onClick={onLogout}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-ec-border bg-ec-surface-raised text-ec-text-secondary transition-colors hover:bg-ec-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent"
-            aria-label="Sign out"
-          >
-            <LogOut size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                onViewChange(activeView === "overview" ? "approvals" : "overview")
+              }
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-ec-border bg-ec-surface-raised text-ec-text-secondary transition-colors hover:bg-ec-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent"
+              aria-label={
+                activeView === "overview"
+                  ? "Show approvals"
+                  : "Show overview"
+              }
+            >
+              {activeView === "overview" ? (
+                <ClipboardList size={18} />
+              ) : (
+                <LayoutDashboard size={18} />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-ec-border bg-ec-surface-raised text-ec-text-secondary transition-colors hover:bg-ec-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent"
+              aria-label="Sign out"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
         ) : null}
       </header>
     </>
@@ -587,14 +839,498 @@ function ReviewDrawer({
   );
 }
 
+const SHIPMENT_PIPELINE = [
+  "INITIATED",
+  "DOCS_UPLOADED",
+  "PENDING_VERIFICATION",
+  "VERIFIED",
+  "EXPORT_DOCS_UPLOADED",
+  "ALLOCATED",
+  "IN_TRANSIT",
+  "ARRIVED",
+  "AT_CUSTOMS",
+  "HELD_FOR_INSPECTION",
+  "CLEARED",
+] as const;
+
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  tone = "navy",
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string | number;
+  hint: string;
+  tone?: "navy" | "amber" | "emerald" | "blue" | "red";
+}) {
+  const toneClass: Record<typeof tone, string> = {
+    navy: "bg-ec-navy text-white",
+    amber: "bg-amber-500 text-white",
+    emerald: "bg-emerald-600 text-white",
+    blue: "bg-blue-600 text-white",
+    red: "bg-red-600 text-white",
+  };
+  return (
+    <div className="rounded-2xl border border-ec-border bg-ec-card p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-ec-text-muted">
+            {label}
+          </p>
+          <p className="mt-2 text-3xl font-extrabold tabular-nums text-ec-text">
+            {value}
+          </p>
+        </div>
+        <span
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl shadow-sm ${toneClass[tone]}`}
+        >
+          <Icon size={21} aria-hidden />
+        </span>
+      </div>
+      <p className="mt-3 text-sm leading-relaxed text-ec-text-secondary">
+        {hint}
+      </p>
+    </div>
+  );
+}
+
+function CountBarList({
+  items,
+  labelFormatter = formatStatusLabel,
+}: {
+  items: AdminCount[];
+  labelFormatter?: (key: string) => string;
+}) {
+  const max = Math.max(1, ...items.map((item) => item.count));
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div key={item.key}>
+          <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+            <span className="font-semibold text-ec-text">
+              {labelFormatter(item.key)}
+            </span>
+            <span className="tabular-nums text-ec-text-secondary">
+              {item.count}
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-ec-border/70">
+            <div
+              className="h-full rounded-full bg-ec-accent"
+              style={{ width: `${Math.max(4, (item.count / max) * 100)}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AdminOverview({
+  analytics,
+  loading,
+  error,
+  onRefresh,
+}: {
+  analytics: AdminAnalytics | null;
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => void;
+}) {
+  if (loading && !analytics) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-36 animate-pulse rounded-2xl border border-ec-border bg-ec-card"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (error && !analytics) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="mt-0.5 shrink-0" size={22} aria-hidden />
+          <div>
+            <h2 className="font-bold">Analytics unavailable</h2>
+            <p className="mt-1 text-sm leading-relaxed">{error}</p>
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="mt-4 inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-800 transition-colors hover:bg-red-100"
+            >
+              <RefreshCw size={16} aria-hidden />
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!analytics) return null;
+
+  const pipelineMap = new Map(
+    analytics.shipments_by_status.map((item) => [item.key, item.count]),
+  );
+  const pipeline = SHIPMENT_PIPELINE.map((key) => ({
+    key,
+    count: pipelineMap.get(key) || 0,
+  }));
+  const otherStatuses = analytics.shipments_by_status.filter(
+    (item) => !SHIPMENT_PIPELINE.includes(item.key as (typeof SHIPMENT_PIPELINE)[number]),
+  );
+  const statusItems = [...pipeline, ...otherStatuses];
+  const updatedAt = formatDateTime(analytics.generated_at);
+  const kpis = [
+    {
+      icon: Activity,
+      label: "Active shipments",
+      value: analytics.overview.active,
+      hint: "Shipments still moving through the workflow.",
+      tone: "blue" as const,
+    },
+    {
+      icon: AlertTriangle,
+      label: "Action required",
+      value: analytics.overview.action_required,
+      hint: "Shipments waiting on documents, review, allocation, customs, or proof repair.",
+      tone: analytics.overview.action_required > 0 ? ("amber" as const) : ("emerald" as const),
+    },
+    {
+      icon: Ship,
+      label: "In transit",
+      value: analytics.overview.in_transit,
+      hint: "Shipments currently in sea or inland movement.",
+      tone: "navy" as const,
+    },
+    {
+      icon: ShieldCheck,
+      label: "Cleared",
+      value: analytics.overview.cleared,
+      hint: "Shipments with final customs release.",
+      tone: "emerald" as const,
+    },
+    {
+      icon: FileCheck,
+      label: "Docs pending",
+      value: analytics.documents.pending_verification,
+      hint: "Importer documents still waiting for verification.",
+      tone: "amber" as const,
+    },
+    {
+      icon: Truck,
+      label: "Available slots",
+      value: analytics.transport.available_slots,
+      hint: "Open ship or truck capacity slots.",
+      tone: "blue" as const,
+    },
+    {
+      icon: Users,
+      label: "Pending accounts",
+      value: analytics.users.pending + analytics.users.info_required,
+      hint: "Registrations that still need admin attention.",
+      tone: "navy" as const,
+    },
+    {
+      icon: Shield,
+      label: "Failed proofs",
+      value: analytics.overview.failed_blockchain_proofs + analytics.blockchain.failed,
+      hint: "Shipment or anchor jobs with failed blockchain proof status.",
+      tone:
+        analytics.overview.failed_blockchain_proofs + analytics.blockchain.failed > 0
+          ? ("red" as const)
+          : ("emerald" as const),
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm text-ec-text-secondary">
+          {updatedAt ? `Last refreshed ${updatedAt}` : "Live operations view"}
+          {error ? (
+            <span className="ml-2 font-semibold text-red-700">{error}</span>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="inline-flex items-center gap-2 self-start rounded-xl border border-ec-border bg-ec-card px-4 py-2.5 text-sm font-semibold text-ec-text shadow-sm transition-all duration-200 hover:border-ec-accent/40 hover:bg-ec-surface-raised disabled:cursor-not-allowed disabled:opacity-60 sm:self-auto"
+        >
+          <RefreshCw
+            size={16}
+            className={loading ? "animate-spin" : ""}
+            aria-hidden
+          />
+          {loading ? "Refreshing..." : "Refresh analytics"}
+        </button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {kpis.map((item) => (
+          <MetricCard key={item.label} {...item} />
+        ))}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <section className="rounded-2xl border border-ec-border bg-ec-card p-5 shadow-sm">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-ec-text">
+                Shipment pipeline
+              </h2>
+              <p className="mt-1 text-sm text-ec-text-secondary">
+                Current shipment volume by workflow stage.
+              </p>
+            </div>
+            <BarChart3 className="shrink-0 text-ec-accent" size={24} />
+          </div>
+          <CountBarList items={statusItems} />
+        </section>
+
+        <section className="rounded-2xl border border-ec-border bg-ec-card p-5 shadow-sm">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-ec-text">
+                Action required
+              </h2>
+              <p className="mt-1 text-sm text-ec-text-secondary">
+                Shipments that need an operational handoff.
+              </p>
+            </div>
+            <AlertCircle className="shrink-0 text-amber-600" size={24} />
+          </div>
+          <div className="space-y-3">
+            {analytics.action_required_shipments.slice(0, 6).map((shipment) => (
+              <div
+                key={shipment.id}
+                className="rounded-xl border border-ec-border bg-ec-surface-raised p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-ec-text">
+                      {shortId(shipment.id)} · {shipment.cargo_type}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-ec-text-secondary">
+                      {shipment.origin_port} to {shipment.destination_port}
+                    </p>
+                  </div>
+                  {statusBadge(shipment.status)}
+                </div>
+                <p className="mt-3 text-sm font-medium text-amber-800">
+                  {shipment.action_reason || "Needs review"}
+                </p>
+              </div>
+            ))}
+            {analytics.action_required_shipments.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-ec-border bg-ec-surface/50 px-4 py-8 text-center text-sm text-ec-text-secondary">
+                No shipment action is required right now.
+              </p>
+            ) : null}
+          </div>
+        </section>
+      </div>
+
+      <section className="overflow-hidden rounded-2xl border border-ec-border bg-ec-card shadow-sm">
+        <div className="flex flex-col gap-2 border-b border-ec-border bg-ec-surface-raised/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-ec-text">
+              Ongoing shipments
+            </h2>
+            <p className="mt-1 text-sm text-ec-text-secondary">
+              Active shipments sorted by latest update.
+            </p>
+          </div>
+          <span className="text-sm font-semibold tabular-nums text-ec-text-secondary">
+            {analytics.ongoing_shipments.length} shown
+          </span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-[940px] w-full text-left text-sm">
+            <thead className="border-b border-ec-border bg-ec-surface text-xs uppercase tracking-wide text-ec-text-muted">
+              <tr>
+                <th className="px-5 py-3 font-bold">Shipment</th>
+                <th className="px-5 py-3 font-bold">Route</th>
+                <th className="px-5 py-3 font-bold">Parties</th>
+                <th className="px-5 py-3 font-bold">Weight</th>
+                <th className="px-5 py-3 font-bold">Status</th>
+                <th className="px-5 py-3 font-bold">Transport</th>
+                <th className="px-5 py-3 font-bold">Last activity</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ec-border">
+              {analytics.ongoing_shipments.slice(0, 12).map((shipment) => (
+                <tr key={shipment.id} className="align-top">
+                  <td className="px-5 py-4">
+                    <p className="font-bold text-ec-text">
+                      {shortId(shipment.id)}
+                    </p>
+                    <p className="mt-1 text-xs text-ec-text-secondary">
+                      {shipment.cargo_type}
+                    </p>
+                  </td>
+                  <td className="px-5 py-4">
+                    <p className="font-medium text-ec-text">
+                      {shipment.origin_port}
+                    </p>
+                    <p className="mt-1 text-xs text-ec-text-secondary">
+                      {shipment.destination_port}
+                    </p>
+                  </td>
+                  <td className="px-5 py-4">
+                    <p className="font-medium text-ec-text">
+                      {shipment.importer_name || shipment.importer_email || "Importer"}
+                    </p>
+                    <p className="mt-1 text-xs text-ec-text-secondary">
+                      {shipment.seller_name || shipment.seller_email || "No seller linked"}
+                    </p>
+                  </td>
+                  <td className="px-5 py-4 tabular-nums text-ec-text">
+                    {formatWeight(shipment.weight_kg)}
+                  </td>
+                  <td className="px-5 py-4">{statusBadge(shipment.status)}</td>
+                  <td className="px-5 py-4 text-ec-text-secondary">
+                    {shipment.transport_refs || "Not allocated"}
+                  </td>
+                  <td className="px-5 py-4">
+                    <p className="font-medium text-ec-text">
+                      {shipment.last_event_action
+                        ? formatActionLabel(shipment.last_event_action)
+                        : "No event yet"}
+                    </p>
+                    <p className="mt-1 text-xs text-ec-text-secondary">
+                      {formatDateTime(shipment.last_event_at) ||
+                        formatDateTime(shipment.updated_at) ||
+                        "Unknown"}
+                    </p>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {analytics.ongoing_shipments.length === 0 ? (
+            <p className="px-5 py-10 text-center text-sm text-ec-text-secondary">
+              No active shipments are currently in progress.
+            </p>
+          ) : null}
+        </div>
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <section className="rounded-2xl border border-ec-border bg-ec-card p-5 shadow-sm xl:col-span-2">
+          <div className="mb-5 flex items-center gap-3">
+            <Clock className="text-ec-accent" size={22} aria-hidden />
+            <div>
+              <h2 className="text-lg font-bold text-ec-text">
+                Recent shipment activity
+              </h2>
+              <p className="mt-1 text-sm text-ec-text-secondary">
+                Latest events written to the shipment audit trail.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {analytics.recent_events.slice(0, 8).map((event) => (
+              <div
+                key={event.id}
+                className="flex flex-col gap-2 rounded-xl border border-ec-border bg-ec-surface-raised p-4 sm:flex-row sm:items-start sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="font-semibold text-ec-text">
+                    {formatActionLabel(event.action)}
+                  </p>
+                  <p className="mt-1 text-sm text-ec-text-secondary">
+                    {event.message || `Shipment ${shortId(event.shipment_id)}`}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                  {statusBadge(event.shipment_status)}
+                  <span className="text-xs text-ec-text-muted">
+                    {formatDateTime(event.created_at)}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {analytics.recent_events.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-ec-border bg-ec-surface/50 px-4 py-8 text-center text-sm text-ec-text-secondary">
+                Shipment events will appear here after workflow activity.
+              </p>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-ec-border bg-ec-card p-5 shadow-sm">
+          <div className="mb-5 flex items-center gap-3">
+            <Package className="text-ec-accent" size={22} aria-hidden />
+            <div>
+              <h2 className="text-lg font-bold text-ec-text">System health</h2>
+              <p className="mt-1 text-sm text-ec-text-secondary">
+                Documents, capacity, and proof status.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-5">
+            <div>
+              <h3 className="text-sm font-bold text-ec-text">Documents</h3>
+              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-xl bg-ec-surface-raised p-3">
+                  <p className="text-ec-text-muted">Importer docs</p>
+                  <p className="mt-1 text-xl font-bold tabular-nums text-ec-text">
+                    {analytics.documents.shipment_documents_total}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-ec-surface-raised p-3">
+                  <p className="text-ec-text-muted">Seller docs</p>
+                  <p className="mt-1 text-xl font-bold tabular-nums text-ec-text">
+                    {analytics.documents.seller_documents_total}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-ec-text">Transport</h3>
+              <p className="mt-2 text-sm text-ec-text-secondary">
+                {analytics.transport.available_slots} available of{" "}
+                {analytics.transport.slots_total} slots.{" "}
+                {formatNumber(analytics.transport.remaining_capacity_kg)} kg
+                remaining.
+              </p>
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-ec-text">Blockchain</h3>
+              <CountBarList
+                items={analytics.blockchain.by_status}
+                labelFormatter={formatStatusLabel}
+              />
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [sessionChecked, setSessionChecked] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activeView, setActiveView] = useState<AdminView>("overview");
   const [token, setToken] = useState<string>("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingUser[]>([]);
   const [unverified, setUnverified] = useState<PendingUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<PendingUser | null>(null);
@@ -619,6 +1355,23 @@ export default function AdminPage() {
     }
     return "";
   }, [token]);
+
+  const refreshAnalytics = useCallback(async (t: string) => {
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    try {
+      const res = await apiFetch<AdminAnalytics>("/api/v1/admin/analytics", {
+        token: t,
+      });
+      setAnalytics(res);
+      setIsLoggedIn(true);
+    } catch (e: unknown) {
+      const msg = errorMessage(e) ?? "Could not load admin analytics.";
+      setAnalyticsError(msg);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, []);
 
   const refreshPending = useCallback(async (t: string) => {
     try {
@@ -663,8 +1416,11 @@ export default function AdminPage() {
         return;
       }
       setIsLoggedIn(true);
-      await refreshPending(res.token);
-      await refreshUnverified(res.token);
+      await Promise.all([
+        refreshAnalytics(res.token),
+        refreshPending(res.token),
+        refreshUnverified(res.token),
+      ]);
       toast("Signed in to the admin console.", "success");
     } catch (e: unknown) {
       const msg =
@@ -680,6 +1436,8 @@ export default function AdminPage() {
     clearStoredToken();
     setToken("");
     setIsLoggedIn(false);
+    setAnalytics(null);
+    setAnalyticsError(null);
     setPending([]);
     setUnverified([]);
   }
@@ -878,14 +1636,16 @@ export default function AdminPage() {
     }
     if (p?.role === "ADMIN") {
       setToken(t);
-      void Promise.all([refreshPending(t), refreshUnverified(t)]).finally(() =>
-        setSessionChecked(true),
-      );
+      void Promise.all([
+        refreshAnalytics(t),
+        refreshPending(t),
+        refreshUnverified(t),
+      ]).finally(() => setSessionChecked(true));
       return;
     }
     clearStoredToken();
     setSessionChecked(true);
-  }, [router, refreshPending, refreshUnverified]);
+  }, [router, refreshAnalytics, refreshPending, refreshUnverified]);
 
   if (!sessionChecked) {
     return (
@@ -933,29 +1693,55 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-ec-surface via-ec-surface to-ec-surface-raised">
-      <Sidebar onLogout={logout} isLoggedIn={isLoggedIn} />
-      <main className="mx-auto flex-1 max-w-6xl px-4 pb-16 pt-6 md:ml-64 md:px-10 md:pt-10">
+      <Sidebar
+        onLogout={logout}
+        isLoggedIn={isLoggedIn}
+        activeView={activeView}
+        onViewChange={setActiveView}
+      />
+      <main className="w-full px-4 pb-16 pt-6 md:ml-[17.5rem] md:w-auto md:px-8 md:pt-10 xl:px-10">
         <div className="mb-8 flex flex-col gap-4 border-b border-ec-border/80 pb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-ec-accent">
               Admin
             </p>
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-ec-text md:text-3xl">
-              Account approvals
+              {activeView === "overview"
+                ? "Shipment operations"
+                : "Account approvals"}
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-ec-text-secondary">
-              Review KYC uploads and activate accounts for the Ethio-Chain
-              platform. Importers and sellers register first; partners follow
-              the same flow.
+              {activeView === "overview"
+                ? "Track live shipments, workflow bottlenecks, document health, transport capacity, and blockchain proof status."
+                : "Review KYC uploads and activate accounts for the Ethio-Chain platform. Importers and sellers register first; partners follow the same flow."}
             </p>
           </div>
-          <Link
-            href="/role-selection"
-            className="inline-flex items-center gap-1 self-start rounded-xl border border-ec-border bg-ec-card px-4 py-2.5 text-sm font-semibold text-ec-text shadow-sm transition-all duration-200 hover:border-ec-accent/40 hover:text-ec-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent sm:self-auto"
-          >
-            Roles and registration
-            <ChevronRight size={16} aria-hidden />
-          </Link>
+          {activeView === "overview" ? (
+            <button
+              type="button"
+              onClick={() => {
+                const t = getToken();
+                if (t) void refreshAnalytics(t);
+              }}
+              disabled={analyticsLoading}
+              className="inline-flex items-center gap-2 self-start rounded-xl border border-ec-border bg-ec-card px-4 py-2.5 text-sm font-semibold text-ec-text shadow-sm transition-all duration-200 hover:border-ec-accent/40 hover:text-ec-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent disabled:cursor-not-allowed disabled:opacity-60 sm:self-auto"
+            >
+              <RefreshCw
+                size={16}
+                className={analyticsLoading ? "animate-spin" : ""}
+                aria-hidden
+              />
+              Refresh analytics
+            </button>
+          ) : (
+            <Link
+              href="/role-selection"
+              className="inline-flex items-center gap-1 self-start rounded-xl border border-ec-border bg-ec-card px-4 py-2.5 text-sm font-semibold text-ec-text shadow-sm transition-all duration-200 hover:border-ec-accent/40 hover:text-ec-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ec-accent sm:self-auto"
+            >
+              Roles and registration
+              <ChevronRight size={16} aria-hidden />
+            </Link>
+          )}
         </div>
 
         {!isLoggedIn ? (
@@ -1031,7 +1817,19 @@ export default function AdminPage() {
           </div>
         ) : null}
 
-        {isLoggedIn ? (
+        {isLoggedIn && activeView === "overview" ? (
+          <AdminOverview
+            analytics={analytics}
+            loading={analyticsLoading}
+            error={analyticsError}
+            onRefresh={() => {
+              const t = getToken();
+              if (t) void refreshAnalytics(t);
+            }}
+          />
+        ) : null}
+
+        {isLoggedIn && activeView === "approvals" ? (
           <div className="flex flex-col gap-6">
           <div className="overflow-hidden rounded-2xl border border-ec-border bg-ec-card shadow-md">
             <div className="flex flex-col gap-4 border-b border-ec-border bg-ec-surface-raised/80 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
