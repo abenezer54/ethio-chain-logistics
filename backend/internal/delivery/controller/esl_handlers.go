@@ -26,6 +26,7 @@ func (h *ESLHandlers) RegisterRoutes(v1 *gin.RouterGroup, jwtSecret string) {
 	esl.Use(RequireRole(domain.RoleESLAgent))
 
 	esl.GET("/shipments/verified", h.listVerifiedShipments)
+	esl.GET("/shipments/active", h.listActiveShipmentDetails)
 	esl.GET("/transport-slots", h.listTransportSlots)
 	esl.POST("/shipments/:id/allocate", h.allocateShipment)
 }
@@ -33,6 +34,16 @@ func (h *ESLHandlers) RegisterRoutes(v1 *gin.RouterGroup, jwtSecret string) {
 func (h *ESLHandlers) listVerifiedShipments(c *gin.Context) {
 	limit := readLimit(c, 100)
 	items, err := h.esl.ListVerifiedShipments(c.Request.Context(), currentUserRole(c), limit)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items})
+}
+
+func (h *ESLHandlers) listActiveShipmentDetails(c *gin.Context) {
+	limit := readLimit(c, 50)
+	items, err := h.esl.ListActiveShipmentDetails(c.Request.Context(), currentUserRole(c), limit)
 	if err != nil {
 		writeError(c, err)
 		return

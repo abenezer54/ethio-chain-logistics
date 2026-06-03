@@ -147,6 +147,17 @@ export async function getImporterShipment(
   return normalizeShipmentDetail(detail);
 }
 
+export async function getSellerShipment(
+  token: string,
+  shipmentID: string
+): Promise<ShipmentDetail> {
+  const detail = await apiFetch<ShipmentDetailResponse>(
+    `/api/v1/seller/shipments/${shipmentID}`,
+    { token }
+  );
+  return normalizeShipmentDetail(detail);
+}
+
 export async function uploadShipmentDocuments(
   token: string,
   shipmentID: string,

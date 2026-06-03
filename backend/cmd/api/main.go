@@ -68,8 +68,10 @@ func main() {
 	}
 	authUC := usecase.NewAuthUsecase(userRepo, docRepo, emailSender, cfg.JWTSecret, cfg.FrontendBaseURL, cfg.BrevoOTPTemplateID)
 	shipmentUC := usecase.NewShipmentUsecase(shipmentRepo)
+	adminAnalyticsRepo := repository.NewAdminAnalyticsRepo(pool)
+	adminAnalyticsUC := usecase.NewAdminAnalyticsUsecase(adminAnalyticsRepo)
 	authHandlers := controller.NewAuthHandlers(authUC, fileStore)
-	adminHandlers := controller.NewAdminHandlers(authUC, fileStore)
+	adminHandlers := controller.NewAdminHandlers(authUC, fileStore, adminAnalyticsUC)
 	importerHandlers := controller.NewImporterHandlers(shipmentUC, fileStore)
 	sellerRepo := repository.NewSellerRepo(pool)
 	sellerUC := usecase.NewSellerUsecase(sellerRepo)

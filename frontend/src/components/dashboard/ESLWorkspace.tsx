@@ -13,16 +13,22 @@ import {
   X,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
+import {
+  getShipmentLocationPoints,
+  LatestLocationBadge,
+  ShipmentLocationTimeline,
+} from "@/components/tracking/ShipmentLocationTimeline";
 import { useToast } from "@/components/ui/ToastProvider";
 import { getStoredToken } from "@/lib/auth-storage";
 import {
   allocateShipment,
+  listActiveShipmentDetailsForESL,
   listAvailableTransportSlots,
   listVerifiedShipmentsForAllocation,
   type TransportSlot,
   type TransportType,
 } from "@/lib/esl";
-import type { Shipment } from "@/lib/shipments";
+import type { Shipment, ShipmentDetail } from "@/lib/shipments";
 
 function formatDate(iso?: string): string {
   if (!iso) return "Not set";
@@ -67,27 +73,6 @@ function slotCanCarry(slot: TransportSlot, shipment?: Shipment): boolean {
   return remainingAfter(slot, shipment) >= 0;
 }
 
-function capacityUnits(slot: TransportSlot, shipment?: Shipment): {
-  total: number;
-  used: number;
-  shipmentUnits: number;
-} {
-  const total = slot.transport_type === "SHIP" ? 30 : 12;
-  const capacity = numberValue(slot.capacity_kg);
-  const remaining = numberValue(slot.remaining_capacity_kg);
-  const shipmentWeight = numberValue(shipment?.weight_kg);
-  if (capacity <= 0) return { total, used: 0, shipmentUnits: 0 };
-  const used = Math.max(
-    0,
-    Math.min(total, Math.round(((capacity - remaining) / capacity) * total)),
-  );
-  const shipmentUnits =
-    shipmentWeight > 0
-      ? Math.max(1, Math.ceil((shipmentWeight / capacity) * total))
-      : 0;
-  return { total, used, shipmentUnits };
-}
-
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   if (typeof e === "string") return e;
@@ -100,6 +85,10 @@ function ModeIcon({ type }: { type: TransportType }) {
 
 function modeLabel(type: TransportType): string {
   return type === "SHIP" ? "Ship" : "Truck";
+}
+
+function statusLabel(status?: string): string {
+  return status ? status.replaceAll("_", " ") : "Not set";
 }
 
 function CapacityMap({
@@ -309,9 +298,6 @@ function SlotPickerModal({
   const previewAfter = previewSlot
     ? remainingAfter(previewSlot, shipment)
     : 0;
-  const previewBlockKG = previewSlot
-    ? numberValue(previewSlot.capacity_kg) / capacityUnits(previewSlot).total
-    : 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -481,6 +467,8 @@ function SlotPickerModal({
 export default function ESLWorkspace() {
   const { toast } = useToast();
   const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [activeDetails, setActiveDetails] = useState<ShipmentDetail[]>([]);
+  const [selectedActiveID, setSelectedActiveID] = useState("");
   const [slots, setSlots] = useState<TransportSlot[]>([]);
   const [selectedShipmentID, setSelectedShipmentID] = useState("");
   const [selectedShipSlotID, setSelectedShipSlotID] = useState("");
@@ -504,6 +492,15 @@ export default function ESLWorkspace() {
     () => slots.find((slot) => slot.id === selectedTruckSlotID),
     [slots, selectedTruckSlotID],
   );
+  const selectedActiveDetail = useMemo(
+    () =>
+      activeDetails.find((detail) => detail.shipment.id === selectedActiveID) ??
+      activeDetails[0],
+    [activeDetails, selectedActiveID],
+  );
+  const trackingCount = activeDetails.filter(
+    (detail) => getShipmentLocationPoints(detail.events).length > 0,
+  ).length;
 
   const loadWorkspace = useCallback(
     async (showRefresh = false) => {
@@ -514,12 +511,19 @@ export default function ESLWorkspace() {
       }
       if (showRefresh) setRefreshing(true);
       try {
-        const [nextShipments, nextSlots] = await Promise.all([
+        const [nextShipments, nextSlots, nextActiveDetails] = await Promise.all([
           listVerifiedShipmentsForAllocation(token),
           listAvailableTransportSlots(token),
+          listActiveShipmentDetailsForESL(token),
         ]);
         setShipments(nextShipments);
         setSlots(nextSlots);
+        setActiveDetails(nextActiveDetails);
+        setSelectedActiveID((current) =>
+          nextActiveDetails.some((detail) => detail.shipment.id === current)
+            ? current
+            : nextActiveDetails[0]?.shipment.id ?? "",
+        );
         setSelectedShipmentID((current) =>
           nextShipments.some((shipment) => shipment.id === current)
             ? current
@@ -656,6 +660,97 @@ export default function ESLWorkspace() {
         </section>
 
         <form onSubmit={submitAllocation} className="space-y-6">
+          <section className="ec-card rounded-lg">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase text-ec-accent">
+                  Movement summary
+                </p>
+                <h2 className="mt-1 text-lg font-bold text-ec-text">
+                  Active allocated shipments
+                </h2>
+                <p className="mt-1 text-sm text-ec-text-secondary">
+                  Follow allocated shipments and review shared GPS updates from transporters.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="rounded-lg border border-ec-border bg-ec-surface-raised px-3 py-2">
+                  <p className="text-lg font-black text-ec-text">
+                    {activeDetails.length}
+                  </p>
+                  <p className="text-[10px] font-bold uppercase text-ec-text-muted">
+                    Active
+                  </p>
+                </div>
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                  <p className="text-lg font-black text-blue-800">
+                    {trackingCount}
+                  </p>
+                  <p className="text-[10px] font-bold uppercase text-blue-700">
+                    GPS
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+              <div className="space-y-2">
+                {loading ? (
+                  <div className="rounded-lg border border-ec-border bg-ec-surface-raised p-4 text-sm text-ec-text-muted">
+                    Loading active shipments...
+                  </div>
+                ) : activeDetails.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-ec-border bg-ec-surface-raised p-4 text-sm text-ec-text-muted">
+                    No allocated shipments are moving yet.
+                  </div>
+                ) : (
+                  activeDetails.slice(0, 5).map((detail) => (
+                    <button
+                      key={detail.shipment.id}
+                      type="button"
+                      onClick={() => setSelectedActiveID(detail.shipment.id)}
+                      className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                        selectedActiveDetail?.shipment.id === detail.shipment.id
+                          ? "border-ec-accent bg-ec-accent/5"
+                          : "border-ec-border bg-white hover:bg-ec-surface-raised"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase text-ec-text-muted">
+                            Shipment {shortID(detail.shipment.id)}
+                          </p>
+                          <p className="mt-1 truncate text-sm font-bold text-ec-text">
+                            {detail.shipment.origin_port} to {detail.shipment.destination_port}
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-ec-border bg-ec-surface-raised px-2 py-0.5 text-[10px] font-bold uppercase text-ec-text-muted">
+                          {statusLabel(detail.shipment.status)}
+                        </span>
+                      </div>
+                      <div className="mt-3">
+                        <LatestLocationBadge events={detail.events} emptyLabel="No GPS" />
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <div>
+                <ShipmentLocationTimeline
+                  events={selectedActiveDetail?.events ?? []}
+                  title={
+                    selectedActiveDetail
+                      ? `Shipment ${shortID(selectedActiveDetail.shipment.id)} GPS`
+                      : "Shipment GPS"
+                  }
+                  emptyText="Transporter GPS updates will appear here once a milestone includes a location."
+                  embedded
+                />
+              </div>
+            </div>
+          </section>
+
           <section className="ec-card rounded-lg">
             <p className="text-xs font-semibold uppercase text-ec-accent">
               Route allocation

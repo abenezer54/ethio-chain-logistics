@@ -57,6 +57,50 @@ LIMIT $1
 	return out, nil
 }
 
+func (r *ESLRepo) ListActiveShipmentDetails(ctx context.Context, limit int) ([]domain.ShipmentDetail, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	const q = `
+SELECT
+  id, importer_id, seller_id,
+  origin_port, destination_port, cargo_type,
+  weight_kg::text, COALESCE(volume_cbm::text, ''),
+  status, anchor_status, COALESCE(blockchain_tx_hash, ''),
+  created_at, updated_at
+FROM shipments
+WHERE status IN ('ALLOCATED', 'IN_TRANSIT', 'ARRIVED', 'AT_CUSTOMS', 'HELD_FOR_INSPECTION', 'CLEARED')
+ORDER BY updated_at DESC
+LIMIT $1
+`
+	rows, err := r.pool.inner.Query(ctx, q, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list active ESL shipment details: %w", err)
+	}
+	defer rows.Close()
+
+	shipmentRepo := &ShipmentRepo{pool: r.pool}
+	out := make([]domain.ShipmentDetail, 0, limit)
+	for rows.Next() {
+		shipment, err := scanShipment(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan active ESL shipment: %w", err)
+		}
+		events, err := shipmentRepo.listEvents(ctx, shipment.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, domain.ShipmentDetail{
+			Shipment: shipment,
+			Events:   events,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate active ESL shipment details: %w", err)
+	}
+	return out, nil
+}
+
 func (r *ESLRepo) ListAvailableTransportSlots(ctx context.Context, limit int) ([]domain.TransportSlot, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100

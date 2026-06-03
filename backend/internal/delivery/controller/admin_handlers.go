@@ -15,12 +15,17 @@ import (
 )
 
 type AdminHandlers struct {
-	auth  *usecase.AuthUsecase
-	store storage.FileStore
+	auth      *usecase.AuthUsecase
+	analytics *usecase.AdminAnalyticsUsecase
+	store     storage.FileStore
 }
 
-func NewAdminHandlers(auth *usecase.AuthUsecase, store storage.FileStore) *AdminHandlers {
-	return &AdminHandlers{auth: auth, store: store}
+func NewAdminHandlers(auth *usecase.AuthUsecase, store storage.FileStore, analytics ...*usecase.AdminAnalyticsUsecase) *AdminHandlers {
+	h := &AdminHandlers{auth: auth, store: store}
+	if len(analytics) > 0 {
+		h.analytics = analytics[0]
+	}
+	return h
 }
 
 func (h *AdminHandlers) RegisterRoutes(v1 *gin.RouterGroup, jwtSecret string) {
@@ -30,11 +35,25 @@ func (h *AdminHandlers) RegisterRoutes(v1 *gin.RouterGroup, jwtSecret string) {
 
 	admin.GET("/pending-approvals", h.listPending)
 	admin.GET("/unverified-users", h.listUnverified)
+	admin.GET("/analytics", h.analyticsDashboard)
 	admin.GET("/users/:id/docs", h.listUserDocs)
 	admin.GET("/docs/:docID/download", h.downloadDoc)
 	admin.POST("/users/:id/approve", h.approveUser)
 	admin.POST("/users/:id/deny", h.denyUser)
 	admin.POST("/users/:id/request-info", h.requestInfo)
+}
+
+func (h *AdminHandlers) analyticsDashboard(c *gin.Context) {
+	if h.analytics == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "analytics unavailable"})
+		return
+	}
+	analytics, err := h.analytics.GetAdminAnalytics(c.Request.Context())
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, analytics)
 }
 
 func (h *AdminHandlers) listUnverified(c *gin.Context) {

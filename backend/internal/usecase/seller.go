@@ -9,6 +9,7 @@ import (
 
 type SellerRepository interface {
 	ListPendingShipments(ctx context.Context, sellerID string, limit int) ([]domain.Shipment, error)
+	GetShipmentDetail(ctx context.Context, sellerID, shipmentID string) (domain.ShipmentDetail, error)
 	GetShipmentDocuments(ctx context.Context, shipmentID string) ([]domain.ShipmentDocument, error)
 	GetSellerDocument(ctx context.Context, docID string) (domain.SellerDocument, error)
 	GetShipmentDocument(ctx context.Context, docID string) (domain.ShipmentDocument, error)
@@ -49,6 +50,10 @@ func (u *SellerUsecase) Dashboard(ctx context.Context, sellerID string) (map[str
 
 func (u *SellerUsecase) ListPending(ctx context.Context, sellerID string, limit int) ([]domain.Shipment, error) {
 	return u.repo.ListPendingShipments(ctx, sellerID, limit)
+}
+
+func (u *SellerUsecase) GetShipmentDetail(ctx context.Context, sellerID, shipmentID string) (domain.ShipmentDetail, error) {
+	return u.repo.GetShipmentDetail(ctx, sellerID, shipmentID)
 }
 
 func (u *SellerUsecase) GetShipmentDocuments(ctx context.Context, shipmentID string) ([]domain.ShipmentDocument, error) {

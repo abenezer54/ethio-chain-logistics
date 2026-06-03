@@ -19,6 +19,10 @@ import {
 } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
 import { BlockchainProofBadge } from "@/components/ui/BlockchainProofBadge";
+import {
+  LatestLocationBadge,
+  ShipmentLocationTimeline,
+} from "@/components/tracking/ShipmentLocationTimeline";
 import { useToast } from "@/components/ui/ToastProvider";
 import { getStoredToken } from "@/lib/auth-storage";
 import type { Shipment, ShipmentEvent, ShipmentStatus } from "@/lib/shipments";
@@ -26,6 +30,7 @@ import {
   addTransportMilestone,
   getTransporterShipment,
   listAssignedTransporterShipments,
+  shareTransportLocation,
   type TransportMilestone,
   type TransporterShipment,
 } from "@/lib/transporter";
@@ -36,6 +41,8 @@ type MilestoneConfig = {
   place: string;
   icon: LucideIcon;
 };
+
+type TransportSubmission = TransportMilestone | "LOCATION_UPDATE";
 
 const MILESTONES: MilestoneConfig[] = [
   {
@@ -87,6 +94,12 @@ const ACTION_TO_MILESTONE: Record<string, TransportMilestone> = {
   TRANSPORT_ARRIVED_DRY_PORT: "ARRIVED_DRY_PORT",
 };
 
+const TEST_LOCATION = {
+  latitude: "9.005401",
+  longitude: "38.763611",
+  note: "Demo location: Addis Ababa",
+};
+
 function shortID(id: string): string {
   return id ? id.slice(0, 8).toUpperCase() : "UNKNOWN";
 }
@@ -130,6 +143,38 @@ function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   if (typeof e === "string") return e;
   return "Something went wrong.";
+}
+
+function geolocationErrorMessage(error: GeolocationPositionError): string {
+  switch (error.code) {
+    case error.PERMISSION_DENIED:
+      return "Location permission was denied. Allow location access in the browser and try again.";
+    case error.POSITION_UNAVAILABLE:
+      return "Your current location is unavailable right now.";
+    case error.TIMEOUT:
+      return "Location capture timed out. Try again or enter latitude and longitude manually.";
+    default:
+      return "Could not capture GPS location.";
+  }
+}
+
+function isGeolocationPositionError(
+  error: unknown,
+): error is GeolocationPositionError {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as { code?: unknown }).code === "number"
+  );
+}
+
+function getBrowserPosition(
+  options: PositionOptions,
+): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, options);
+  });
 }
 
 function TransportModeIcon({
@@ -268,6 +313,7 @@ function ShipmentListItem({
             <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusTone(shipment.status)}`}>
               {STATUS_LABEL[shipment.status] ?? shipment.status}
             </span>
+            <LatestLocationBadge events={item.events} emptyLabel="No GPS" />
           </div>
           <h3 className="flex items-center gap-2 text-lg font-black text-ec-text">
             <span className="truncate">{shipment.origin_port}</span>
@@ -365,12 +411,15 @@ function MilestonePanel({
   longitude,
   locationNote,
   gpsLoading,
+  sharingLocation,
   submitting,
   onLatitude,
   onLongitude,
   onLocationNote,
   onUseGPS,
+  onUseTestLocation,
   onShareLocation,
+  onSaveLocation,
   onSubmit,
 }: {
   item: TransporterShipment;
@@ -378,12 +427,15 @@ function MilestonePanel({
   longitude: string;
   locationNote: string;
   gpsLoading: boolean;
-  submitting: TransportMilestone | null;
+  sharingLocation: boolean;
+  submitting: TransportSubmission | null;
   onLatitude: (value: string) => void;
   onLongitude: (value: string) => void;
   onLocationNote: (value: string) => void;
   onUseGPS: () => void;
+  onUseTestLocation: () => void;
   onShareLocation: () => void;
+  onSaveLocation: () => void;
   onSubmit: (milestone: TransportMilestone) => void;
 }) {
   const visibleMilestones = useMemo(
@@ -399,6 +451,7 @@ function MilestonePanel({
   const terminal =
     item.shipment.status === "CLEARED" ||
     visibleMilestones.every((milestone) => completed.has(milestone.id));
+  const canSaveLocation = !terminal && submitting === null;
 
   return (
     <section className="ec-card rounded-lg">
@@ -425,15 +478,46 @@ function MilestonePanel({
           </button>
           <button
             type="button"
-            onClick={onShareLocation}
-            disabled={!latitude || !longitude}
+            onClick={onUseTestLocation}
+            disabled={gpsLoading}
             className="ec-btn-ghost border border-ec-border bg-ec-card"
           >
-            <Share2 size={16} aria-hidden />
-            Share location
+            <MapPin size={16} aria-hidden />
+            Use test location
+          </button>
+          <button
+            type="button"
+            onClick={onSaveLocation}
+            disabled={!canSaveLocation || !latitude || !longitude || gpsLoading}
+            className="ec-btn-primary"
+          >
+            {submitting === "LOCATION_UPDATE" ? (
+              <Spinner size="sm" label="Saving location" />
+            ) : (
+              <MapPin size={16} aria-hidden />
+            )}
+            Save location to tracking
+          </button>
+          <button
+            type="button"
+            onClick={onShareLocation}
+            disabled={sharingLocation || gpsLoading}
+            className="ec-btn-ghost border border-ec-border bg-ec-card"
+          >
+            {sharingLocation ? (
+              <Spinner size="sm" label="Sharing location" />
+            ) : (
+              <Share2 size={16} aria-hidden />
+            )}
+            {latitude && longitude ? "Copy/share externally" : "Capture and copy"}
           </button>
         </div>
       </div>
+
+      <p className="mt-3 text-sm text-ec-text-secondary">
+        GPS appears in shared tracking only after you save a milestone with
+        latitude and longitude.
+      </p>
 
       <div className="mt-5 grid gap-3 md:grid-cols-3">
         <label className="block">
@@ -656,8 +740,9 @@ export default function TransporterWorkspace() {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [submitting, setSubmitting] = useState<TransportMilestone | null>(null);
+  const [submitting, setSubmitting] = useState<TransportSubmission | null>(null);
   const [gpsLoading, setGPSLoading] = useState(false);
+  const [sharingLocation, setSharingLocation] = useState(false);
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [locationNote, setLocationNote] = useState("");
@@ -699,7 +784,11 @@ export default function TransporterWorkspace() {
       if (!token || !shipmentID || !allocationID) return;
       setDetailLoading(true);
       try {
-        setDetail(await getTransporterShipment(token, shipmentID, allocationID));
+        const next = await getTransporterShipment(token, shipmentID, allocationID);
+        setDetail(next);
+        setItems((current) =>
+          current.map((item) => (item.allocation.id === allocationID ? next : item)),
+        );
       } catch (err) {
         toast(errorMessage(err), "error");
         setDetail(null);
@@ -720,40 +809,72 @@ export default function TransporterWorkspace() {
       return;
     }
     const item = items.find((candidate) => candidate.allocation.id === selectedID);
-    if (item) loadDetail(item.shipment.id, item.allocation.id);
-  }, [selectedID, items, loadDetail]);
+    if (!item || detail?.allocation.id === selectedID) return;
+    loadDetail(item.shipment.id, item.allocation.id);
+  }, [selectedID, items, detail?.allocation.id, loadDetail]);
 
-  function useCurrentLocation() {
-    void captureCurrentLocation();
+  async function useCurrentLocation() {
+    try {
+      await captureCurrentLocation();
+    } catch (err) {
+      toast(errorMessage(err), "error");
+    }
   }
 
-  function captureCurrentLocation(): Promise<{ latitude: string; longitude: string }> {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error("GPS is not available in this browser."));
-        return;
+  function useTestLocation() {
+    setLatitude(TEST_LOCATION.latitude);
+    setLongitude(TEST_LOCATION.longitude);
+    setLocationNote((current) => current || TEST_LOCATION.note);
+    toast("Test location filled. Save it to tracking when ready.", "success");
+  }
+
+  async function captureCurrentLocation(): Promise<{ latitude: string; longitude: string }> {
+    if (!navigator.geolocation) {
+      throw new Error("GPS is not available in this browser.");
+    }
+
+    setGPSLoading(true);
+    try {
+      let position: GeolocationPosition;
+      try {
+        position = await getBrowserPosition({
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        });
+      } catch (firstError) {
+        if (
+          isGeolocationPositionError(firstError) &&
+          firstError.code === firstError.PERMISSION_DENIED
+        ) {
+          throw new Error(geolocationErrorMessage(firstError));
+        }
+        position = await getBrowserPosition({
+          enableHighAccuracy: false,
+          timeout: 10000,
+          maximumAge: 60000,
+        });
       }
-      setGPSLoading(true);
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const nextLatitude = String(position.coords.latitude);
-          const nextLongitude = String(position.coords.longitude);
-          setLatitude(nextLatitude);
-          setLongitude(nextLongitude);
-          setGPSLoading(false);
-          toast("GPS location captured.", "success");
-          resolve({ latitude: nextLatitude, longitude: nextLongitude });
-        },
-        () => {
-          setGPSLoading(false);
-          reject(new Error("Could not capture GPS location."));
-        },
-        { enableHighAccuracy: true, timeout: 10000 },
-      );
-    });
+
+      const nextLatitude = position.coords.latitude.toFixed(6);
+      const nextLongitude = position.coords.longitude.toFixed(6);
+      setLatitude(nextLatitude);
+      setLongitude(nextLongitude);
+      toast("GPS location captured.", "success");
+      return { latitude: nextLatitude, longitude: nextLongitude };
+    } catch (err) {
+      if (isGeolocationPositionError(err)) {
+        throw new Error(geolocationErrorMessage(err));
+      }
+      throw err;
+    } finally {
+      setGPSLoading(false);
+    }
   }
 
   async function shareCurrentLocation() {
+    if (sharingLocation) return;
+    setSharingLocation(true);
     let nextLatitude = latitude.trim();
     let nextLongitude = longitude.trim();
     if (!nextLatitude || !nextLongitude) {
@@ -763,6 +884,7 @@ export default function TransporterWorkspace() {
         nextLongitude = captured.longitude;
       } catch (err) {
         toast(errorMessage(err), "error");
+        setSharingLocation(false);
         return;
       }
     }
@@ -790,6 +912,52 @@ export default function TransporterWorkspace() {
     } catch (err) {
       if ((err as DOMException)?.name === "AbortError") return;
       toast(errorMessage(err), "error");
+    } finally {
+      setSharingLocation(false);
+    }
+  }
+
+  async function saveCurrentLocation() {
+    const token = getStoredToken();
+    const active = detail ?? selectedListItem;
+    if (!token || !active) return;
+
+    let nextLatitude = latitude.trim();
+    let nextLongitude = longitude.trim();
+    if (!nextLatitude || !nextLongitude) {
+      try {
+        const captured = await captureCurrentLocation();
+        nextLatitude = captured.latitude;
+        nextLongitude = captured.longitude;
+      } catch (err) {
+        toast(errorMessage(err), "error");
+        return;
+      }
+    }
+
+    setSubmitting("LOCATION_UPDATE");
+    try {
+      const updated = await shareTransportLocation(token, active.shipment.id, {
+        allocation_id: active.allocation.id,
+        latitude: nextLatitude,
+        longitude: nextLongitude,
+        location_note: locationNote.trim() || undefined,
+      });
+      const normalized = {
+        ...updated,
+        events: Array.isArray(updated.events) ? updated.events : [],
+      };
+      setDetail(normalized);
+      setItems((current) =>
+        current.map((item) =>
+          item.allocation.id === normalized.allocation.id ? normalized : item,
+        ),
+      );
+      toast("Location saved to shared tracking.", "success");
+    } catch (err) {
+      toast(errorMessage(err), "error");
+    } finally {
+      setSubmitting(null);
     }
   }
 
@@ -899,13 +1067,21 @@ export default function TransporterWorkspace() {
               longitude={longitude}
               locationNote={locationNote}
               gpsLoading={gpsLoading}
+              sharingLocation={sharingLocation}
               submitting={submitting}
               onLatitude={setLatitude}
               onLongitude={setLongitude}
               onLocationNote={setLocationNote}
               onUseGPS={useCurrentLocation}
+              onUseTestLocation={useTestLocation}
               onShareLocation={shareCurrentLocation}
+              onSaveLocation={saveCurrentLocation}
               onSubmit={submitMilestone}
+            />
+            <ShipmentLocationTimeline
+              events={activeDetail.events ?? []}
+              title="Shared GPS locations"
+              emptyText="Add latitude and longitude to a milestone to share a tracked location."
             />
             <Timeline events={activeDetail.events ?? []} />
           </>

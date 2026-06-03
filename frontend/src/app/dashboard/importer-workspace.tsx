@@ -19,6 +19,10 @@ import {
 import { Spinner } from "@/components/ui/Spinner";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { BlockchainProofBadge } from "@/components/ui/BlockchainProofBadge";
+import {
+  LatestLocationBadge,
+  ShipmentLocationTimeline,
+} from "@/components/tracking/ShipmentLocationTimeline";
 import { useToast } from "@/components/ui/ToastProvider";
 import { getStoredToken } from "@/lib/auth-storage";
 import {
@@ -44,20 +48,6 @@ type SellerOption = {
   email?: string;
   origin_country?: string;
 };
-
-const STATUS_STEPS: ShipmentStatus[] = [
-  "INITIATED",
-  "DOCS_UPLOADED",
-  "PENDING_VERIFICATION",
-  "VERIFIED",
-  "EXPORT_DOCS_UPLOADED",
-  "APPROVED",
-  "ALLOCATED",
-  "IN_TRANSIT",
-  "ARRIVED",
-  "AT_CUSTOMS",
-  "CLEARED",
-];
 
 const STATUS_LABEL: Record<ShipmentStatus, string> = {
   INITIATED: "Initiated",
@@ -258,10 +248,12 @@ function ShipmentStatusBadge({ status }: { status: ShipmentStatus }) {
 
 function ShipmentCard({
   shipment,
+  events,
   selected,
   onSelect,
 }: {
   shipment: Shipment;
+  events?: ShipmentEvent[];
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -286,7 +278,12 @@ function ShipmentCard({
             {shipment.destination_port}
           </h3>
         </div>
-        <ShipmentStatusBadge status={shipment.status} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <ShipmentStatusBadge status={shipment.status} />
+          {events ? (
+            <LatestLocationBadge events={events} emptyLabel="No GPS" />
+          ) : null}
+        </div>
       </div>
       <div className="mt-4 grid gap-2 text-sm text-ec-text-secondary sm:grid-cols-2">
         <span className="inline-flex items-center gap-2">
@@ -696,8 +693,6 @@ function DocumentUploadForm({
 }
 
 function ProgressSteps({ status }: { status: ShipmentStatus }) {
-  const activeIndex = STATUS_STEPS.indexOf(status);
-
   // Define major milestone groups
   const MILESTONES = [
     {
@@ -742,7 +737,6 @@ function ProgressSteps({ status }: { status: ShipmentStatus }) {
         {MILESTONES.map((milestone, index) => {
           const isCompleted = index < currentMilestoneIndex;
           const isActive = index === currentMilestoneIndex;
-          const isPending = index > currentMilestoneIndex;
 
           return (
             <div
@@ -879,16 +873,14 @@ function DocumentsList({
             </div>
           </div>
           <div className="mt-3 grid gap-2 text-xs text-ec-text-muted sm:grid-cols-3">
-            <span className="inline-flex items-center gap-1.5">
-              <ShieldCheck size={14} aria-hidden />
-              {doc.verification_status ? (
+            {doc.verification_status && doc.verification_status !== "PENDING" ? (
+              <span className="inline-flex items-center gap-1.5">
+                <ShieldCheck size={14} aria-hidden />
                 <span className={verificationTone(doc.verification_status)}>
                   {doc.verification_status}
                 </span>
-              ) : (
-                <span className="text-ec-text-muted">Seller uploaded</span>
-              )}
-            </span>
+              </span>
+            ) : null}
             <span>{formatBytes(doc.size_bytes)}</span>
             <span>{formatDate(doc.uploaded_at)}</span>
           </div>
@@ -1059,7 +1051,7 @@ function ShipmentDetailPanel({
               {shipment.destination_port}
             </h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <ShipmentStatusBadge status={shipment.status} />
             <button
               type="button"
@@ -1157,6 +1149,12 @@ function ShipmentDetailPanel({
           />
         </section>
       )}
+
+      <ShipmentLocationTimeline
+        events={events}
+        title="Shared transport locations"
+        emptyText="Transporter GPS updates will appear here when a milestone includes location."
+      />
 
       <section className="ec-card rounded-lg">
         <div className="mb-4 flex items-center gap-2">
@@ -1340,6 +1338,11 @@ export function ImporterWorkspace() {
                   <ShipmentCard
                     key={shipment.id}
                     shipment={shipment}
+                    events={
+                      detail?.shipment.id === shipment.id
+                        ? detail.events
+                        : undefined
+                    }
                     selected={shipment.id === selectedShipment?.id}
                     onSelect={() => setSelectedID(shipment.id)}
                   />
