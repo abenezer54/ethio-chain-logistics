@@ -7,24 +7,23 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/domain"
+	"github.com/abenezer54/ethio-chain-logistics/backend/internal/storage"
 	"github.com/abenezer54/ethio-chain-logistics/backend/internal/usecase"
 	"github.com/gin-gonic/gin"
 )
 
 type CustomsHandlers struct {
-	customs   *usecase.CustomsUsecase
-	uploadDir string
+	customs *usecase.CustomsUsecase
+	store   storage.FileStore
 }
 
-func NewCustomsHandlers(customs *usecase.CustomsUsecase, uploadDir string) *CustomsHandlers {
-	return &CustomsHandlers{customs: customs, uploadDir: uploadDir}
+func NewCustomsHandlers(customs *usecase.CustomsUsecase, store storage.FileStore) *CustomsHandlers {
+	return &CustomsHandlers{customs: customs, store: store}
 }
 
 func (h *CustomsHandlers) RegisterRoutes(v1 *gin.RouterGroup, jwtSecret string) {
@@ -59,7 +58,7 @@ func (h *CustomsHandlers) getShipment(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, h.customsDetail(detail))
+	c.JSON(http.StatusOK, h.customsDetail(c, detail))
 }
 
 func (h *CustomsHandlers) grantRelease(c *gin.Context) {
@@ -69,7 +68,7 @@ func (h *CustomsHandlers) grantRelease(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	if reviewed := h.customsDetail(detail); !reviewed.ReleaseReady {
+	if reviewed := h.customsDetail(c, detail); !reviewed.ReleaseReady {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "document hashes must match before digital release"})
 		return
 	}
@@ -83,7 +82,7 @@ func (h *CustomsHandlers) grantRelease(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, h.customsDetail(released))
+	c.JSON(http.StatusOK, h.customsDetail(c, released))
 }
 
 func (h *CustomsHandlers) certificate(c *gin.Context) {
@@ -92,7 +91,7 @@ func (h *CustomsHandlers) certificate(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	reviewed := h.customsDetail(detail)
+	reviewed := h.customsDetail(c, detail)
 	if reviewed.Shipment.Status != domain.ShipmentStatusCleared {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "certificate is available after digital release"})
 		return
@@ -103,8 +102,8 @@ func (h *CustomsHandlers) certificate(c *gin.Context) {
 	c.Data(http.StatusOK, "application/pdf", pdf)
 }
 
-func (h *CustomsHandlers) customsDetail(detail domain.ShipmentDetail) domain.CustomsShipmentDetail {
-	checks := h.documentChecks(detail)
+func (h *CustomsHandlers) customsDetail(c *gin.Context, detail domain.ShipmentDetail) domain.CustomsShipmentDetail {
+	checks := h.documentChecks(c, detail)
 	return domain.CustomsShipmentDetail{
 		Shipment:     detail.Shipment,
 		Documents:    checks,
@@ -113,10 +112,10 @@ func (h *CustomsHandlers) customsDetail(detail domain.ShipmentDetail) domain.Cus
 	}
 }
 
-func (h *CustomsHandlers) documentChecks(detail domain.ShipmentDetail) []domain.CustomsDocumentCheck {
+func (h *CustomsHandlers) documentChecks(c *gin.Context, detail domain.ShipmentDetail) []domain.CustomsDocumentCheck {
 	out := make([]domain.CustomsDocumentCheck, 0, len(detail.Documents)+len(detail.SellerDocuments))
 	for _, doc := range detail.Documents {
-		matched, status := h.checkFileHash(doc.StorageKey, doc.SHA256Hash)
+		matched, status := h.checkFileHash(c, doc.StorageKey, doc.SHA256Hash)
 		out = append(out, domain.CustomsDocumentCheck{
 			ID:                 doc.ID,
 			ShipmentID:         doc.ShipmentID,
@@ -135,7 +134,7 @@ func (h *CustomsHandlers) documentChecks(detail domain.ShipmentDetail) []domain.
 		})
 	}
 	for _, doc := range detail.SellerDocuments {
-		matched, status := h.checkFileHash(doc.StorageKey, doc.SHA256Hash)
+		matched, status := h.checkFileHash(c, doc.StorageKey, doc.SHA256Hash)
 		out = append(out, domain.CustomsDocumentCheck{
 			ID:               doc.ID,
 			ShipmentID:       doc.ShipmentID,
@@ -155,21 +154,16 @@ func (h *CustomsHandlers) documentChecks(detail domain.ShipmentDetail) []domain.
 	return out
 }
 
-func (h *CustomsHandlers) checkFileHash(storageKey, expectedHash string) (bool, string) {
+func (h *CustomsHandlers) checkFileHash(c *gin.Context, storageKey, expectedHash string) (bool, string) {
 	expectedHash = strings.TrimSpace(strings.ToLower(expectedHash))
 	if expectedHash == "" {
 		return false, "NO_RECORDED_HASH"
 	}
-	clean := filepath.Clean(storageKey)
-	if clean == "." || clean == ".." || filepath.IsAbs(clean) || strings.HasPrefix(clean, ".."+string(os.PathSeparator)) {
-		return false, "INVALID_PATH"
+	if h.store == nil {
+		return false, "STORAGE_UNAVAILABLE"
 	}
-	path := filepath.Join(h.uploadDir, clean)
-	f, err := os.Open(path)
+	f, err := h.store.Open(c.Request.Context(), storageKey)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return false, "MISSING_FILE"
-		}
 		return false, "READ_ERROR"
 	}
 	defer f.Close()

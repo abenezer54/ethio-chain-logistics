@@ -84,7 +84,7 @@ func main() {
 	transporterHandlers := controller.NewTransporterHandlers(transporterUC)
 	customsRepo := repository.NewCustomsRepo(pool)
 	customsUC := usecase.NewCustomsUsecase(customsRepo)
-	customsHandlers := controller.NewCustomsHandlers(customsUC, cfg.UploadDir)
+	customsHandlers := controller.NewCustomsHandlers(customsUC, fileStore)
 
 	var anchorCancel context.CancelFunc
 	if cfg.BlockchainEnabled {
