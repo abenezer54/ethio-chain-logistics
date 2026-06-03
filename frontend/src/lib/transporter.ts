@@ -61,3 +61,24 @@ export function addTransportMilestone(
     },
   );
 }
+
+export function shareTransportLocation(
+  token: string,
+  shipmentID: string,
+  payload: {
+    allocation_id: string;
+    latitude: string;
+    longitude: string;
+    location_note?: string;
+  },
+): Promise<TransporterShipment> {
+  return apiFetch<TransporterShipment>(
+    `/api/v1/transporter/shipments/${shipmentID}/location`,
+    {
+      method: "POST",
+      token,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+}

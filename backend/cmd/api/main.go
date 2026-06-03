@@ -68,8 +68,10 @@ func main() {
 	}
 	authUC := usecase.NewAuthUsecase(userRepo, docRepo, emailSender, cfg.JWTSecret, cfg.FrontendBaseURL, cfg.BrevoOTPTemplateID)
 	shipmentUC := usecase.NewShipmentUsecase(shipmentRepo)
+	adminAnalyticsRepo := repository.NewAdminAnalyticsRepo(pool)
+	adminAnalyticsUC := usecase.NewAdminAnalyticsUsecase(adminAnalyticsRepo)
 	authHandlers := controller.NewAuthHandlers(authUC, fileStore)
-	adminHandlers := controller.NewAdminHandlers(authUC, fileStore)
+	adminHandlers := controller.NewAdminHandlers(authUC, fileStore, adminAnalyticsUC)
 	importerHandlers := controller.NewImporterHandlers(shipmentUC, fileStore)
 	sellerRepo := repository.NewSellerRepo(pool)
 	sellerUC := usecase.NewSellerUsecase(sellerRepo)
@@ -82,7 +84,7 @@ func main() {
 	transporterHandlers := controller.NewTransporterHandlers(transporterUC)
 	customsRepo := repository.NewCustomsRepo(pool)
 	customsUC := usecase.NewCustomsUsecase(customsRepo)
-	customsHandlers := controller.NewCustomsHandlers(customsUC, cfg.UploadDir)
+	customsHandlers := controller.NewCustomsHandlers(customsUC, fileStore)
 
 	var anchorCancel context.CancelFunc
 	if cfg.BlockchainEnabled {

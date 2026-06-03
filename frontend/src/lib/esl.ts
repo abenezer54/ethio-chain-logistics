@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api";
-import type { Shipment } from "@/lib/shipments";
+import type { Shipment, ShipmentDetail } from "@/lib/shipments";
 
 export type TransportType = "SHIP" | "TRUCK";
 export type TransportSlotStatus = "AVAILABLE" | "BOOKED" | "MAINTENANCE";
@@ -47,6 +47,25 @@ export async function listVerifiedShipmentsForAllocation(
     { token },
   );
   return Array.isArray(res.items) ? res.items : [];
+}
+
+export async function listActiveShipmentDetailsForESL(
+  token: string,
+): Promise<ShipmentDetail[]> {
+  const res = await apiFetch<{ items?: ShipmentDetail[] | null }>(
+    "/api/v1/esl/shipments/active",
+    { token },
+  );
+  return Array.isArray(res.items)
+    ? res.items.map((item) => ({
+        ...item,
+        documents: Array.isArray(item.documents) ? item.documents : [],
+        seller_documents: Array.isArray(item.seller_documents)
+          ? item.seller_documents
+          : [],
+        events: Array.isArray(item.events) ? item.events : [],
+      }))
+    : [];
 }
 
 export async function listAvailableTransportSlots(

@@ -29,11 +29,12 @@ export function BlockchainProofBadge({
   status = "PENDING",
   txHash,
 }: BlockchainProofBadgeProps) {
-  const label = STATUS_COPY[status] ?? STATUS_COPY.PENDING;
-  const tone = STATUS_TONE[status] ?? STATUS_TONE.PENDING;
+  const effectiveStatus = txHash && status === "PENDING" ? "ANCHORED" : status;
+  const label = STATUS_COPY[effectiveStatus] ?? STATUS_COPY.PENDING;
+  const tone = STATUS_TONE[effectiveStatus] ?? STATUS_TONE.PENDING;
   const href = txHash && EXPLORER_TX_BASE ? `${EXPLORER_TX_BASE}${txHash}` : "";
   const Icon =
-    status === "ANCHORED" ? CheckCircle2 : status === "FAILED" ? TriangleAlert : Clock3;
+    effectiveStatus === "ANCHORED" ? CheckCircle2 : effectiveStatus === "FAILED" ? TriangleAlert : Clock3;
 
   const content = (
     <>
@@ -56,4 +57,3 @@ export function BlockchainProofBadge({
 
   return <span className={className}>{content}</span>;
 }
-

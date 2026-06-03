@@ -165,6 +165,48 @@ RETURNING
 	return out, nil
 }
 
+func (r *TransporterRepo) ShareLocation(ctx context.Context, req usecase.ShareTransportLocationRequest) (domain.TransporterShipment, error) {
+	tx, err := r.pool.inner.Begin(ctx)
+	if err != nil {
+		return domain.TransporterShipment{}, fmt.Errorf("begin transport location share: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	item, err := r.getAssignedShipment(ctx, tx, req.TransporterID, req.ShipmentID, req.AllocationID, false)
+	if err != nil {
+		return domain.TransporterShipment{}, err
+	}
+
+	metadata := map[string]any{
+		"allocation_id":            item.Allocation.ID,
+		"leg_type":                 item.Allocation.LegType,
+		"transport_slot_id":        item.TransportSlot.ID,
+		"transport_reference_code": item.TransportSlot.ReferenceCode,
+		"latitude":                 req.Latitude,
+		"longitude":                req.Longitude,
+	}
+	if req.LocationNote != "" {
+		metadata["location_note"] = req.LocationNote
+	}
+
+	if _, err := (&ShipmentRepo{pool: r.pool}).appendEvent(ctx, tx, shipmentEventInput{
+		ShipmentID: req.ShipmentID,
+		ActorID:    req.TransporterID,
+		ActorRole:  domain.RoleTransporter,
+		Action:     "TRANSPORT_LOCATION_SHARED",
+		Message:    "Transporter shared a GPS location update.",
+		Metadata:   metadata,
+	}); err != nil {
+		return domain.TransporterShipment{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.TransporterShipment{}, fmt.Errorf("commit transport location share: %w", err)
+	}
+
+	return r.GetAssignedShipment(ctx, req.TransporterID, req.ShipmentID, req.AllocationID)
+}
+
 type assignedShipmentScanner interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
